@@ -53,10 +53,12 @@ export default function ClientLayout({
   }
 
   return (
-    <html lang="en">
-      <body className={`${abel.variable} ${afacad.variable} antialiased`}>
-        <ThemeProvider>{renderPage()}</ThemeProvider>
-      </body>
-    </html>
+    <ThemeProvider>
+      <html lang="en">
+        <body className={`${abel.variable} ${afacad.variable} antialiased`}>
+          {renderPage()}
+        </body>
+      </html>
+    </ThemeProvider>
   )
 }
