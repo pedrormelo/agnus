@@ -34,6 +34,7 @@ import {
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast, Toaster } from "sonner"
+import api from "@/lib/api"
 
 interface DashboardPageProps {
   onNavigate: (page: string, data?: any) => void
@@ -89,6 +90,10 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     },
   ])
 
+  const [equipamentos, setEquipamentos] = useState<any[]>([])
+  const [tecnicos, setTecnicos] = useState<any[]>([])
+  const [unidades, setUnidades] = useState<any[]>([])
+
   // Update time every second
   useEffect(() => {
     const timer = setInterval(() => {
@@ -108,134 +113,148 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     }
   }, [autoRefresh])
 
-  // Mock data
+  useEffect(() => {
+    api.get("/equipamentos").then((res) => setEquipamentos(res.data)).catch(() => toast.error("Erro ao carregar equipamentos"))
+    api.get("/tecnicos").then((res) => setTecnicos(res.data)).catch(() => toast.error("Erro ao carregar técnicos"))
+    api.get("/unidades").then((res) => setUnidades(res.data)).catch(() => toast.error("Erro ao carregar unidades"))
+  }, [])
+
+  // Real stats from backend data
   const stats = {
-    totalComputadores: 156,
-    entrada: 12,
-    prontos: 8,
-    saida: 4,
-    tecnicos: 5,
-    unidades: 8,
-    tempoMedioReparo: "2.5h",
-    eficiencia: 87,
-    satisfacao: 94,
-    resolucaoRapida: 76,
+    totalComputadores: equipamentos.length,
+    entrada: equipamentos.filter((e) => e.status === "ENTRADA").length,
+    prontos: equipamentos.filter((e) => e.status === "PRONTO").length,
+    saida: equipamentos.filter((e) => e.status === "SAÍDA").length,
+    tecnicos: tecnicos.length,
+    unidades: unidades.length,
+    tempoMedioReparo: "-", // Placeholder
+    eficiencia: 0, // Placeholder
+    satisfacao: 0, // Placeholder
+    resolucaoRapida: 0, // Placeholder
   }
 
-  const recentActivityData = [
-    {
-      id: 1,
-      tipo: "ENTRADA",
-      tombamento: "202259131",
-      unidade: "USF RIO DAS VELHAS II",
-      tempo: "2 min",
-      tecnico: "João Silva",
-      ambiente: "Recepção",
-    },
-    {
-      id: 2,
-      tipo: "PRONTO",
-      tombamento: "202259128",
-      unidade: "USF QUADROS III",
-      tempo: "5 min",
-      tecnico: "Maria Santos",
-      ambiente: "Consultório",
-    },
-    {
-      id: 3,
-      tipo: "SAÍDA",
-      tombamento: "202259125",
-      unidade: "USF VIETNÃ",
-      tempo: "8 min",
-      tecnico: "Pedro Costa",
-      ambiente: "Enfermaria",
-    },
-    {
-      id: 4,
-      tipo: "ENTRADA",
-      tombamento: "202259132",
-      unidade: "USF CENTRO",
-      tempo: "12 min",
-      tecnico: "Ana Lima",
-      ambiente: "Administração",
-    },
-    {
-      id: 5,
-      tipo: "PRONTO",
-      tombamento: "202259133",
-      unidade: "USF NORTE",
-      tempo: "15 min",
-      tecnico: "Carlos Oliveira",
-      ambiente: "Laboratório",
-    },
-    {
-      id: 6,
-      tipo: "SAÍDA",
-      tombamento: "202259134",
-      unidade: "USF SUL",
-      tempo: "18 min",
-      tecnico: "João Silva",
-      ambiente: "Farmácia",
-    },
-  ]
+  // Compute tecnico stats from real data
+  const computedTecnicoStats = tecnicos.map((tecnico: any) => {
+    const tickets = equipamentos.filter((e) => e.idTecnico === tecnico.idTec).length
+    // Placeholder: eficiencia could be calculated if you have more data
+    return {
+      nome: tecnico.nomeTec,
+      tickets,
+      eficiencia: 100, // TODO: replace with real calculation if available
+    }
+  })
+
+  // Compute unidade stats from real data
+  const computedUnidadeStats = unidades
+    .map((unidade: any) => {
+      const entrada = equipamentos.filter((e) => e.idUnidade === unidade.idUnidade && e.status === "ENTRADA").length
+      const prontos = equipamentos.filter((e) => e.idUnidade === unidade.idUnidade && e.status === "PRONTO").length
+      const saida = equipamentos.filter((e) => e.idUnidade === unidade.idUnidade && e.status === "SAÍDA").length
+      return {
+        nome: unidade.nomeUnidade,
+        entrada,
+        prontos,
+        saida,
+      }
+    })
+
+  // Recent activity from real data (last 10 equipamentos, newest first)
+  const recentActivity = equipamentos
+    .slice()
+    .reverse()
+    .slice(0, 10)
+    .map((e) => ({
+      id: e.idEquip,
+      tipo: e.status,
+      tombamento: e.idTomb,
+      unidade: unidades.find((u) => u.idUnidade === e.idUnidade)?.nomeUnidade || e.idUnidade,
+      tempo: e.dataEntrada ? new Date(e.dataEntrada).toLocaleString() : "",
+      tecnico: tecnicos.find((t) => t.idTec === e.idTecnico)?.nomeTec || e.idTecnico,
+      ambiente: e.ambiente,
+    }))
 
   // Filter for PRONTO items
-  const prontosItems = recentActivityData.filter((item) => item.tipo === "PRONTO")
+  const prontosItems = recentActivity.filter((item) => item.tipo === "PRONTO")
 
-  const [recentActivity, setRecentActivity] = useState(recentActivityData)
+  // Prontos items: all equipamentos with status PRONTO
+  const allProntosItems = equipamentos
+    .filter((e) => e.status === "PRONTO")
+    .map((e) => ({
+      id: e.idEquip,
+      tombamento: e.idTomb,
+      unidade: unidades.find((u) => u.idUnidade === e.idUnidade)?.nomeUnidade || e.idUnidade,
+      tempo: e.dataEntrada ? new Date(e.dataEntrada).toLocaleString() : "",
+      tecnico: tecnicos.find((t) => t.idTec === e.idTecnico)?.nomeTec || e.idTecnico,
+      ambiente: e.ambiente,
+    }))
+
+  // Filters for activity
+  const filteredActivity = recentActivity.filter((item) => {
+    let statusOk = statusFilter === "todos" || item.tipo.toLowerCase() === statusFilter
+    let tecnicoOk = tecnicoFilter === "todos" || item.tecnico === tecnicoFilter
+    return statusOk && tecnicoOk
+  })
+
+  // --- Improved Técnicos Carousel Logic (Page-based) ---
+  const TECNICOS_PER_PAGE = 4
+  const totalPages = Math.ceil(computedTecnicoStats.length / TECNICOS_PER_PAGE)
+  const [currentPage, setCurrentPage] = useState(0)
 
   useEffect(() => {
-    let filteredActivity = recentActivityData
-
-    if (statusFilter !== "todos") {
-      filteredActivity = filteredActivity.filter((item) => item.tipo.toLowerCase() === statusFilter)
+    if (currentPage > totalPages - 1) {
+      setCurrentPage(Math.max(0, totalPages - 1))
     }
+  }, [computedTecnicoStats.length, totalPages])
 
-    if (tecnicoFilter !== "todos") {
-      filteredActivity = filteredActivity.filter((item) => item.tecnico === tecnicoFilter)
-    }
-
-    setRecentActivity(filteredActivity)
-  }, [statusFilter, tecnicoFilter])
-
-  const tecnicoStats = [
-    { nome: "João Silva", tickets: 23, eficiencia: 91 },
-    { nome: "Maria Santos", tickets: 19, eficiencia: 95 },
-    { nome: "Pedro Costa", tickets: 17, eficiencia: 88 },
-    { nome: "Ana Lima", tickets: 21, eficiencia: 90 },
-    { nome: "Carlos Oliveira", tickets: 15, eficiencia: 93 },
-    { nome: "Fernanda Costa", tickets: 18, eficiencia: 87 },
-  ]
-
-  const unidadeStats = [
-    { nome: "USF RIO DAS VELHAS II", entrada: 4, prontos: 2, saida: 1 },
-    { nome: "USF QUADROS III", entrada: 2, prontos: 3, saida: 1 },
-    { nome: "USF VIETNÃ", entrada: 3, prontos: 1, saida: 0 },
-    { nome: "USF CENTRO", entrada: 2, prontos: 2, saida: 2 },
-  ]
-
-  // Carousel navigation with smooth transitions
   const nextTecnico = () => {
     if (isTransitioning) return
     setIsTransitioning(true)
-    setCurrentTecnicoIndex((prev) => {
-      const maxIndex = Math.max(0, tecnicoStats.length - 4)
-      return prev >= maxIndex ? 0 : prev + 1
-    })
+    setCurrentPage((prev) => (prev < totalPages - 1 ? prev + 1 : prev))
     setTimeout(() => setIsTransitioning(false), 300)
   }
 
   const prevTecnico = () => {
     if (isTransitioning) return
     setIsTransitioning(true)
-    setCurrentTecnicoIndex((prev) => {
-      const maxIndex = Math.max(0, tecnicoStats.length - 4)
-      return prev <= 0 ? maxIndex : prev - 1
-    })
+    setCurrentPage((prev) => (prev > 0 ? prev - 1 : 0))
     setTimeout(() => setIsTransitioning(false), 300)
   }
 
-  const visibleTecnicos = tecnicoStats.slice(currentTecnicoIndex, currentTecnicoIndex + 3)
+  const visibleTecnicos = computedTecnicoStats.slice(
+    currentPage * TECNICOS_PER_PAGE,
+    currentPage * TECNICOS_PER_PAGE + TECNICOS_PER_PAGE
+  )
+
+  // --- Unidade Carousel Logic (Page-based) ---
+  const UNIDADES_PER_PAGE = 4
+  const totalUnidadePages = Math.ceil(computedUnidadeStats.length / UNIDADES_PER_PAGE)
+  const [currentUnidadePage, setCurrentUnidadePage] = useState(0)
+  const [isUnidadeTransitioning, setIsUnidadeTransitioning] = useState(false)
+
+  useEffect(() => {
+    if (currentUnidadePage > totalUnidadePages - 1) {
+      setCurrentUnidadePage(Math.max(0, totalUnidadePages - 1))
+    }
+  }, [computedUnidadeStats.length, totalUnidadePages])
+
+  const nextUnidade = () => {
+    if (isUnidadeTransitioning) return
+    setIsUnidadeTransitioning(true)
+    setCurrentUnidadePage((prev) => (prev < totalUnidadePages - 1 ? prev + 1 : prev))
+    setTimeout(() => setIsUnidadeTransitioning(false), 300)
+  }
+
+  const prevUnidade = () => {
+    if (isUnidadeTransitioning) return
+    setIsUnidadeTransitioning(true)
+    setCurrentUnidadePage((prev) => (prev > 0 ? prev - 1 : 0))
+    setTimeout(() => setIsUnidadeTransitioning(false), 300)
+  }
+
+  const visibleUnidades = computedUnidadeStats.slice(
+    currentUnidadePage * UNIDADES_PER_PAGE,
+    currentUnidadePage * UNIDADES_PER_PAGE + UNIDADES_PER_PAGE
+  )
 
   // Notification functions
   const markAllAsRead = () => {
@@ -537,7 +556,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               </SelectTrigger>
               <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white">
                 <SelectItem value="todos">Todos</SelectItem>
-                {tecnicoStats.map((tecnico) => (
+                {computedTecnicoStats.map((tecnico) => (
                   <SelectItem key={tecnico.nome} value={tecnico.nome}>
                     {tecnico.nome}
                   </SelectItem>
@@ -645,7 +664,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               </CardHeader>
               <CardContent className="pt-0 h-[280px] overflow-y-auto custom-scroll">
                 <div className="space-y-1.5">
-                  {recentActivity.map((activity) => (
+                  {filteredActivity.map((activity) => (
                     <div
                       key={activity.id}
                       className="flex items-center justify-between p-2.5 bg-[#121212] rounded-lg hover:bg-[#1a1a1a] transition-colors cursor-pointer"
@@ -700,8 +719,8 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               </CardHeader>
               <CardContent className="pt-0 h-[280px] overflow-y-auto custom-scroll">
                 <div className="space-y-2">
-                  {prontosItems.length > 0 ? (
-                    prontosItems.map((item) => (
+                  {allProntosItems.length > 0 ? (
+                    allProntosItems.map((item) => (
                       <div
                         key={item.id}
                         className="p-2.5 bg-[#121212] rounded-lg hover:bg-[#1a1a1a] transition-colors cursor-pointer border-l-2 border-l-blue-400"
@@ -745,7 +764,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   size="icon"
                   onClick={prevTecnico}
                   className="h-8 w-8 text-[#E9A870] hover:bg-[#E9A870]/10 rounded-full transition-all duration-200"
-                  disabled={isTransitioning || currentTecnicoIndex === 0}
+                  disabled={isTransitioning || currentPage === 0}
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
@@ -754,7 +773,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   size="icon"
                   onClick={nextTecnico}
                   className="h-8 w-8 text-[#E9A870] hover:bg-[#E9A870]/10 rounded-full transition-all duration-200"
-                  disabled={isTransitioning || currentTecnicoIndex >= Math.max(0, tecnicoStats.length - 4)}
+                  disabled={isTransitioning || currentPage === totalPages - 1}
                 >
                   <ChevronRight className="h-4 w-4" />
                 </Button>
@@ -774,14 +793,15 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
               <div
                 className="flex transition-transform duration-300 ease-in-out gap-2"
                 style={{
-                  transform: `translateX(-${currentTecnicoIndex * (100 / 4)}%)`,
-                  width: `${(tecnicoStats.length / 4) * 100}%`,
+                  width: `${totalPages * 100}%`,
+                  transform: `translateX(-${currentPage * (100 / totalPages)}%)`,
                 }}
               >
-                {tecnicoStats.map((tecnico, index) => (
+                {computedTecnicoStats.map((tecnico, index) => (
                   <div
                     key={tecnico.nome}
-                    className="flex-shrink-0 w-1/4 p-2.5 bg-[#121212] rounded-lg hover:bg-[#1a1a1a] transition-colors cursor-pointer border border-[#E9A870]/20 hover:border-[#E9A870]/40"
+                    className="p-2.5 bg-[#121212] rounded-lg hover:bg-[#1a1a1a] transition-colors cursor-pointer border border-[#E9A870]/20 hover:border-[#E9A870]/40"
+                    style={{ width: `${100 / (totalPages * TECNICOS_PER_PAGE)}%`, minWidth: 0 }}
                     onClick={() => onNavigate("tecnicos", { selectedTecnico: tecnico.nome })}
                   >
                     <div className="flex items-center gap-2 mb-2">
@@ -808,18 +828,18 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
 
               {/* Scroll Indicators */}
               <div className="flex justify-center mt-3 gap-1">
-                {Array.from({ length: Math.ceil(tecnicoStats.length / 4) }).map((_, index) => (
+                {Array.from({ length: totalPages }).map((_, index) => (
                   <button
                     key={index}
                     onClick={() => {
                       if (!isTransitioning) {
                         setIsTransitioning(true)
-                        setCurrentTecnicoIndex(index)
+                        setCurrentPage(index)
                         setTimeout(() => setIsTransitioning(false), 300)
                       }
                     }}
                     className={`w-2 h-2 rounded-full transition-all duration-200 ${
-                      Math.floor(currentTecnicoIndex / 1) === index ? "bg-[#E9A870]" : "bg-gray-600 hover:bg-gray-500"
+                      currentPage === index ? "bg-[#E9A870]" : "bg-gray-600 hover:bg-gray-500"
                     }`}
                   />
                 ))}
@@ -828,44 +848,96 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
           </CardContent>
         </Card>
 
-        {/* Units Overview - Simplified */}
+        {/* Units Overview - Carousel */}
         <Card className="bg-[#1C1815] border-[#E9A870]/30">
           <CardHeader className="pb-3">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
-              <Building className="h-4 w-4 text-[#E9A870]" />
-              Unidades de Saúde
-            </h3>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Building className="h-4 w-4 text-[#E9A870]" />
+                Unidades de Saúde
+              </h3>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={prevUnidade}
+                  className="h-8 w-8 text-[#E9A870] hover:bg-[#E9A870]/10 rounded-full transition-all duration-200"
+                  disabled={isUnidadeTransitioning || currentUnidadePage === 0}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={nextUnidade}
+                  className="h-8 w-8 text-[#E9A870] hover:bg-[#E9A870]/10 rounded-full transition-all duration-200"
+                  disabled={isUnidadeTransitioning || currentUnidadePage === totalUnidadePages - 1}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="grid grid-cols-4 gap-4">
-              {unidadeStats.map((unidade) => (
-                <div key={unidade.nome} className="p-3 bg-[#121212] rounded-lg hover:bg-[#1a1a1a] transition-colors">
-                  <h4 className="text-sm font-medium text-white mb-2">{unidade.nome}</h4>
-                  <div className="flex justify-between text-sm">
-                    <div className="text-center">
-                      <div className="flex items-center gap-1 mb-1">
-                        <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                        <span className="text-red-400">{unidade.entrada}</span>
+            <div className="relative overflow-hidden">
+              <div
+                className="flex transition-transform duration-300 ease-in-out gap-4"
+                style={{
+                  width: `${totalUnidadePages * 100}%`,
+                  transform: `translateX(-${currentUnidadePage * (100 / totalUnidadePages)}%)`,
+                }}
+              >
+                {computedUnidadeStats.map((unidade, index) => (
+                  <div
+                    key={unidade.nome}
+                    className="p-3 bg-[#121212] rounded-lg hover:bg-[#1a1a1a] transition-colors border border-[#E9A870]/20 hover:border-[#E9A870]/40"
+                    style={{ width: `${100 / (UNIDADES_PER_PAGE)}%`, minWidth: 0 }}
+                  >
+                    <h4 className="text-sm font-bold text-white mb-2">{unidade.nome}</h4>
+                    <div className="flex justify-between text-sm">
+                      <div className="text-center">
+                        <div className="flex items-center gap-1 mb-1">
+                          <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                          <span className="text-red-400">{unidade.entrada}</span>
+                        </div>
+                        <p className="text-gray-500">Entrada</p>
                       </div>
-                      <p className="text-gray-500">Entrada</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center gap-1 mb-1">
-                        <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                        <span className="text-blue-400">{unidade.prontos}</span>
+                      <div className="text-center">
+                        <div className="flex items-center gap-1 mb-1">
+                          <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                          <span className="text-blue-400">{unidade.prontos}</span>
+                        </div>
+                        <p className="text-gray-500">Prontos</p>
                       </div>
-                      <p className="text-gray-500">Prontos</p>
-                    </div>
-                    <div className="text-center">
-                      <div className="flex items-center gap-1 mb-1">
-                        <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <span className="text-green-400">{unidade.saida}</span>
+                      <div className="text-center">
+                        <div className="flex items-center gap-1 mb-1">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-green-400">{unidade.saida}</span>
+                        </div>
+                        <p className="text-gray-500">Saída</p>
                       </div>
-                      <p className="text-gray-500">Saída</p>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              {/* Scroll Indicators */}
+              <div className="flex justify-center mt-3 gap-1">
+                {Array.from({ length: totalUnidadePages }).map((_, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      if (!isUnidadeTransitioning) {
+                        setIsUnidadeTransitioning(true)
+                        setCurrentUnidadePage(index)
+                        setTimeout(() => setIsUnidadeTransitioning(false), 300)
+                      }
+                    }}
+                    className={`w-2 h-2 rounded-full transition-all duration-200 ${
+                      currentUnidadePage === index ? "bg-[#E9A870]" : "bg-gray-600 hover:bg-gray-500"
+                    }`}
+                  />
+                ))}
+              </div>
             </div>
           </CardContent>
         </Card>

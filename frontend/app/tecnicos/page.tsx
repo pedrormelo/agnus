@@ -19,195 +19,184 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Menu, Plus, Filter, Edit, Trash2, Search, X, Phone, Mail, Check, Home, ChevronRight } from "lucide-react"
+import { Menu, Plus, Filter, Edit, Trash2, Search, X, Phone, Check, Home, ChevronRight } from "lucide-react"
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { cn } from "@/lib/utils"
 import { toast, Toaster } from "sonner"
+import api from "@/lib/api"
 
 interface TecnicosProps {
   onNavigate: (page: string, data?: any) => void
   data?: any
 }
 
-// Mock data for technicians
-const mockTecnicos = [
-  {
-    id: 1,
-    nome: "JOÃO SILVA",
-    atuacao: "INTERNO",
-    telefone: "(81) 99999-1111",
-    email: "joao.silva@saude.jaboatao.pe.gov.br",
-    unidade: "USF RIO DAS VELHAS II",
-    dataAdmissao: "2023-01-15",
-    especialidades: ["Hardware", "Redes"],
-    status: "ATIVO",
-  },
-  {
-    id: 2,
-    nome: "MARIA SANTOS",
-    atuacao: "EXTERNO",
-    telefone: "(81) 99999-2222",
-    email: "maria.santos@empresa.com",
-    unidade: "MÚLTIPLAS",
-    dataAdmissao: "2023-03-20",
-    especialidades: ["Software", "Sistemas"],
-    status: "ATIVO",
-  },
-  {
-    id: 3,
-    nome: "PEDRO COSTA",
-    atuacao: "INTERNO",
-    telefone: "(81) 99999-3333",
-    email: "pedro.costa@saude.jaboatao.pe.gov.br",
-    unidade: "USF QUADROS III",
-    dataAdmissao: "2022-11-10",
-    especialidades: ["Hardware", "Manutenção"],
-    status: "ATIVO",
-  },
-  {
-    id: 4,
-    nome: "ANA LIMA",
-    atuacao: "INTERNO",
-    telefone: "(81) 99999-4444",
-    email: "ana.lima@saude.jaboatao.pe.gov.br",
-    unidade: "USF VIETNÃ",
-    dataAdmissao: "2023-06-01",
-    especialidades: ["Software", "Suporte"],
-    status: "ATIVO",
-  },
-  {
-    id: 5,
-    nome: "FELIPE FILIPE FELIPE",
-    atuacao: "EXTERNO",
-    telefone: "(81) 99999-5555",
-    email: "felipe@empresa.com",
-    unidade: "MÚLTIPLAS",
-    dataAdmissao: "2023-08-15",
-    especialidades: ["Redes", "Infraestrutura"],
-    status: "ATIVO",
-  },
-]
+// Define the Tecnico type based on your backend data structure
+interface Tecnico {
+  idTec: number; // idTec
+  nomeTec: string; // nomeTec
+  numTec?: string; // numTec
+  habTec: string; // habTec as string
+  areaTec: string; // areaTec
+}
 
 export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [activeTab, setActiveTab] = useState("TODOS")
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [filteredTecnicos, setFilteredTecnicos] = useState(mockTecnicos)
+  const [tecnicos, setTecnicos] = useState<Tecnico[]>([])
+  const [filteredTecnicos, setFilteredTecnicos] = useState<Tecnico[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [selectedTecnico, setSelectedTecnico] = useState<any>(null)
-  const [tecnicoToDelete, setTecnicoToDelete] = useState<any>(null)
+  const [selectedTecnico, setSelectedTecnico] = useState<Tecnico | null>(null)
+  const [tecnicoToDelete, setTecnicoToDelete] = useState<Tecnico | null>(null)
   const [formData, setFormData] = useState({
     nome: "",
     atuacao: "",
     telefone: "",
-    email: "",
-    unidade: "",
     especialidades: "",
   })
 
   const tabs = ["TODOS", "INTERNOS", "EXTERNOS"]
   const unidades = ["USF RIO DAS VELHAS II", "USF QUADROS III", "USF VIETNÃ", "USF CENTRO", "MÚLTIPLAS"]
 
+  // Fetch technicians from backend
+  React.useEffect(() => {
+    api.get("/tecnicos")
+      .then((res: { data: Tecnico[] }) => {
+        setTecnicos(res.data)
+        setFilteredTecnicos(res.data)
+      })
+      .catch(() => toast.error("Erro ao carregar técnicos"))
+  }, [])
+
   // Filter technicians based on search and tab
   React.useEffect(() => {
-    let filtered = mockTecnicos
+    let filtered = tecnicos
 
     // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter(
         (tecnico) =>
-          tecnico.nome.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          tecnico.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          tecnico.unidade.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          tecnico.atuacao.toLowerCase().includes(searchQuery.toLowerCase()),
+          tecnico.nomeTec.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (tecnico.numTec ?? "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (tecnico.habTec ?? "").toLowerCase().includes(searchQuery.toLowerCase()),
       )
     }
 
     // Apply tab filter
     if (activeTab === "INTERNOS") {
-      filtered = filtered.filter((tecnico) => tecnico.atuacao === "INTERNO")
+      filtered = filtered.filter((tecnico) => tecnico.areaTec === "Interno")
     } else if (activeTab === "EXTERNOS") {
-      filtered = filtered.filter((tecnico) => tecnico.atuacao === "EXTERNO")
+      filtered = filtered.filter((tecnico) => tecnico.areaTec === "Externo")
     }
 
     setFilteredTecnicos(filtered)
-  }, [searchQuery, activeTab])
+  }, [searchQuery, activeTab, tecnicos])
 
   // Highlight selected technician if coming from another page
   React.useEffect(() => {
     if (data?.selectedTecnico) {
-      const tecnico = mockTecnicos.find((t) => t.nome === data.selectedTecnico)
+      const tecnico = tecnicos.find((t) => t.nomeTec === data.selectedTecnico)
       if (tecnico) {
         setSelectedTecnico(tecnico)
         // Auto-scroll to technician or highlight it
       }
     }
-  }, [data])
+  }, [data, tecnicos])
 
-  const handleAddTecnico = (e: React.FormEvent) => {
+  const handleAddTecnico = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Here you would normally submit to API
-    console.log("Adding technician:", formData)
-    toast.success("Técnico adicionado com sucesso!", {
-      duration: 3000,
-      position: "top-right",
-    })
-    setIsAddDialogOpen(false)
-    setFormData({
-      nome: "",
-      atuacao: "",
-      telefone: "",
-      email: "",
-      unidade: "",
-      especialidades: "",
-    })
+    // Map form fields to backend fields
+    const payload = {
+      nomeTec: formData.nome,
+      areaTec: formData.atuacao === "INTERNO" ? "Interno" : formData.atuacao === "EXTERNO" ? "Externo" : formData.atuacao,
+      numTec: formData.telefone,
+      habTec: formData.especialidades,
+    }
+    try {
+      const res = await api.post("/tecnicos", payload)
+      const newTec = res.data
+      setTecnicos((prev) => [...prev, newTec])
+      setFilteredTecnicos((prev) => [...prev, newTec])
+      toast.success("Técnico adicionado com sucesso!", {
+        duration: 3000,
+        position: "top-right",
+      })
+      setIsAddDialogOpen(false)
+      setFormData({
+        nome: "",
+        atuacao: "",
+        telefone: "",
+        especialidades: "",
+      })
+    } catch (err) {
+      toast.error("Erro ao adicionar técnico")
+    }
   }
 
-  const handleEditTecnico = (tecnico: any) => {
+  const handleEditTecnico = (tecnico: Tecnico) => {
     setSelectedTecnico(tecnico)
     setFormData({
-      nome: tecnico.nome,
-      atuacao: tecnico.atuacao,
-      telefone: tecnico.telefone,
-      email: tecnico.email,
-      unidade: tecnico.unidade,
-      especialidades: tecnico.especialidades.join(", "),
+      nome: tecnico.nomeTec,
+      atuacao: tecnico.areaTec === "Interno" ? "INTERNO" : tecnico.areaTec === "Externo" ? "EXTERNO" : tecnico.areaTec,
+      telefone: tecnico.numTec || "",
+      especialidades: tecnico.habTec || "",
     })
     setIsEditDialogOpen(true)
   }
 
-  const handleUpdateTecnico = (e: React.FormEvent) => {
+  const handleUpdateTecnico = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Here you would normally submit to API
-    console.log("Updating technician:", formData)
-    toast.success("Técnico atualizado com sucesso!", {
-      duration: 3000,
-      position: "top-right",
-    })
-    setIsEditDialogOpen(false)
-    setSelectedTecnico(null)
+    if (!selectedTecnico) return
+    // Map form fields to backend fields
+    const payload = {
+      nomeTec: formData.nome,
+      areaTec: formData.atuacao === "INTERNO" ? "Interno" : formData.atuacao === "EXTERNO" ? "Externo" : formData.atuacao,
+      numTec: formData.telefone,
+      habTec: formData.especialidades,
+    }
+    try {
+      const res = await api.put(`/tecnicos/${selectedTecnico.idTec}`, payload)
+      const updatedTec = res.data
+      setTecnicos((prev) => prev.map((t) => (t.idTec === updatedTec.idTec ? updatedTec : t)))
+      setFilteredTecnicos((prev) => prev.map((t) => (t.idTec === updatedTec.idTec ? updatedTec : t)))
+      toast.success("Técnico atualizado com sucesso!", {
+        duration: 3000,
+        position: "top-right",
+      })
+      setIsEditDialogOpen(false)
+      setSelectedTecnico(null)
+    } catch (err) {
+      toast.error("Erro ao atualizar técnico")
+    }
   }
 
-  const handleDeleteClick = (tecnico: any) => {
+  const handleDeleteClick = (tecnico: Tecnico) => {
     setTecnicoToDelete(tecnico)
     setDeleteDialogOpen(true)
   }
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (tecnicoToDelete) {
-      toast.success(`Técnico ${tecnicoToDelete.nome} foi excluído com sucesso`, {
-        duration: 3000,
-        position: "top-right",
-      })
-      setDeleteDialogOpen(false)
-      setTecnicoToDelete(null)
+      try {
+        await api.delete(`/tecnicos/${tecnicoToDelete.idTec}`)
+        setTecnicos((prev) => prev.filter((t) => t.idTec !== tecnicoToDelete.idTec))
+        setFilteredTecnicos((prev) => prev.filter((t) => t.idTec !== tecnicoToDelete.idTec))
+        toast.success(`Técnico ${tecnicoToDelete.nomeTec} foi excluído com sucesso`, {
+          duration: 3000,
+          position: "top-right",
+        })
+        setDeleteDialogOpen(false)
+        setTecnicoToDelete(null)
+      } catch (err) {
+        toast.error("Erro ao excluir técnico")
+      }
     }
   }
 
-  const isFormValid = formData.nome && formData.atuacao && formData.telefone && formData.email && formData.unidade
+  const isFormValid = formData.nome && formData.atuacao && formData.telefone
 
   return (
     <div className="min-h-screen bg-[#191818] text-white font-abel">
@@ -325,40 +314,8 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
                         className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white placeholder:text-gray-400 focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-[#E9A870]">
-                        EMAIL <span className="text-red-400">*</span>
-                      </label>
-                      <Input
-                        type="email"
-                        placeholder="email@exemplo.com"
-                        value={formData.email}
-                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                        className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white placeholder:text-gray-400 focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200"
-                      />
-                    </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <label className="text-sm font-medium text-[#E9A870]">
-                        UNIDADE <span className="text-red-400">*</span>
-                      </label>
-                      <Select
-                        value={formData.unidade}
-                        onValueChange={(value) => setFormData({ ...formData, unidade: value })}
-                      >
-                        <SelectTrigger className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200">
-                          <SelectValue placeholder="Selecione a unidade" />
-                        </SelectTrigger>
-                        <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
-                          {unidades.map((unidade) => (
-                            <SelectItem key={unidade} value={unidade}>
-                              {unidade}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-[#E9A870]">ESPECIALIDADES</label>
                       <Input
@@ -457,9 +414,9 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
         </div>
 
         {/* Table */}
-        <Card className="bg-[#1C1815] border-[#E9A870] border-2 rounded-xl overflow-hidden shadow-2xl backdrop-blur-sm">
+        <Card className="bg-[#1C1815] border-[#E9A870] border-2 rounded-xl overflow-hidden shadow-2xl backdrop-blur-sm max-w-7xl mx-auto">
           <CardHeader className="bg-gradient-to-r from-[#E9A870] to-[#A8784F] p-0">
-            <div className="grid grid-cols-4 gap-6 px-6 py-4 text-black font-bold text-lg">
+            <div className="grid grid-cols-4 gap-4 px-8 py-4 text-black font-bold text-lg">
               <div className="text-center">ID</div>
               <div>NOME</div>
               <div>ATUAÇÃO</div>
@@ -468,93 +425,99 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
           </CardHeader>
           <CardContent className="p-0 min-h-[350px] bg-[#1C1815] custom-scroll">
             {filteredTecnicos.length > 0 ? (
-              filteredTecnicos.map((tecnico, index) => (
+              filteredTecnicos.map((tecnico: Tecnico, index: number) => (
                 <div
-                  key={tecnico.id}
-                  className={`grid grid-cols-4 gap-6 px-6 py-4 border-b border-[#E9A870]/30 items-center hover:bg-gradient-to-r hover:from-gray-800/20 hover:to-gray-700/20 transition-all duration-300 group hover:scale-[1.01] hover:shadow-lg ${
-                    selectedTecnico?.id === tecnico.id ? "bg-[#E9A870]/10 border-[#E9A870]/50" : ""
+                  key={tecnico.idTec}
+                  className={`grid grid-cols-4 gap-4 px-8 py-4 border-b border-[#E9A870]/30 items-center hover:bg-gradient-to-r hover:from-gray-800/20 hover:to-gray-700/20 transition-all duration-300 group hover:scale-[1.01] hover:shadow-lg ${
+                    selectedTecnico?.idTec === tecnico.idTec ? "bg-[#E9A870]/10 border-[#E9A870]/50" : ""
                   }`}
                   style={{ animationDelay: `${index * 100}ms` }}
                 >
-                  <div className="text-gray-300 group-hover:text-white transition-colors text-center font-bold">
-                    {tecnico.id}
+                  <div className="text-gray-300 group-hover:text-white transition-colors text-center font-bold text-base">
+                    {tecnico.idTec}
                   </div>
                   <div className="space-y-1">
-                    <div className="text-gray-300 group-hover:text-white transition-colors font-bold">
-                      {tecnico.nome}
+                    <div className="text-gray-300 group-hover:text-white transition-colors font-bold text-base">
+                      {tecnico.nomeTec}
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-gray-400 flex-wrap">
+                      {tecnico.habTec.split(",").map((esp, idx) => (
+                        <span key={idx} className="bg-[#E9A870]/10 px-2 py-0.5 rounded mr-1 mb-1">{esp.trim()}</span>
+                      ))}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <Mail className="h-3 w-3" />
-                      {tecnico.email}
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <Phone className="h-3 w-3" />
-                      {tecnico.telefone}
+                      <Phone className="h-4 w-4" />
+                      {tecnico.numTec}
                     </div>
                   </div>
-                  <div className="space-y-1">
-                    <div
-                      className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
-                        tecnico.atuacao === "INTERNO"
-                          ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
-                          : "bg-purple-500/20 text-purple-300 border border-purple-500/30"
-                      }`}
-                    >
-                      {tecnico.atuacao}
-                    </div>
-                    <div className="text-sm text-gray-400">{tecnico.especialidades.join(", ")}</div>
+                  <div>
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-bold ${
+                      tecnico.areaTec === "Interno"
+                        ? "bg-blue-500/20 text-blue-300 border border-blue-500/30"
+                        : "bg-purple-500/20 text-purple-300 border-purple-500/30"
+                    }`}>
+                      {tecnico.areaTec}
+                    </span>
                   </div>
                   <div className="flex gap-3">
                     <Button
                       variant="ghost"
                       size="icon"
-                      onClick={() => handleEditTecnico(tecnico)}
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleEditTecnico(tecnico);
+                      }}
                       className="h-8 w-8 hover:bg-gradient-to-r hover:from-gray-700/50 hover:to-gray-600/50 transition-all duration-200 hover:scale-110"
                     >
-                      <Edit className="h-4 w-4 text-[#E0CAA5]" />
+                      <Edit className="h-5 w-5 text-[#E0CAA5]" />
                     </Button>
-                    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteClick(tecnico)}
-                          className="h-8 w-8 hover:bg-gradient-to-r hover:from-red-700/50 hover:to-red-600/50 transition-all duration-200 hover:scale-110"
-                        >
-                          <Trash2 className="h-4 w-4 text-red-400" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent className="bg-[#1C1815] border-[#E9A870] text-white">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-[#E9A870] text-xl font-abel">
-                            Confirmar Exclusão
-                          </AlertDialogTitle>
-                          <AlertDialogDescription className="text-gray-300 font-arial">
-                            Tem certeza que deseja excluir o técnico{" "}
-                            <span className="font-bold text-white">{tecnicoToDelete?.nome}</span>?
-                            <br />
-                            <span className="text-red-400 text-sm">Esta ação não pode ser desfeita.</span>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500">
-                            Cancelar
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={confirmDelete}
-                            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleDeleteClick(tecnico);
+                      }}
+                      className="h-8 w-8 hover:bg-gradient-to-r hover:from-red-700/50 hover:to-red-600/50 transition-all duration-200 hover:scale-110"
+                    >
+                      <Trash2 className="h-5 w-5 text-red-400" />
+                    </Button>
+      {/* Global Delete Dialog (outside map) */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open)
+        if (!open) setTecnicoToDelete(null)
+      }}>
+        <AlertDialogContent className="bg-[#1C1815] border-[#E9A870] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#E9A870] text-xl font-abel">
+              Confirmar Exclusão
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300 font-arial">
+              Tem certeza que deseja excluir o técnico{" "}
+              <span className="font-bold text-white">{tecnicoToDelete?.nomeTec}</span>?
+              <br />
+              <span className="text-red-400 text-sm">Esta ação não pode ser desfeita.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
                   </div>
                 </div>
               ))
             ) : (
-              <div className="flex justify-center items-center h-40 text-gray-400">Nenhum técnico encontrado</div>
+              <div className="text-center text-gray-400 py-8">Nenhum técnico encontrado.</div>
             )}
           </CardContent>
         </Card>
@@ -609,40 +572,6 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
                   onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                   className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white placeholder:text-gray-400 focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200"
                 />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-[#E9A870]">
-                  EMAIL <span className="text-red-400">*</span>
-                </label>
-                <Input
-                  type="email"
-                  placeholder="email@exemplo.com"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white placeholder:text-gray-400 focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-[#E9A870]">
-                  UNIDADE <span className="text-red-400">*</span>
-                </label>
-                <Select
-                  value={formData.unidade}
-                  onValueChange={(value) => setFormData({ ...formData, unidade: value })}
-                >
-                  <SelectTrigger className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200">
-                    <SelectValue placeholder="Selecione a unidade" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
-                    {unidades.map((unidade) => (
-                      <SelectItem key={unidade} value={unidade}>
-                        {unidade}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-medium text-[#E9A870]">ESPECIALIDADES</label>

@@ -1,8 +1,24 @@
+
 "use client"
+
+// Helper to format date/time in a readable way (DD/MM/YYYY HH:mm)
+function formatDateTime(dateString?: string | null) {
+  if (!dateString) return "Não definida";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+}
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -41,6 +57,7 @@ import {
 } from "lucide-react"
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { toast, Toaster } from "sonner"
+import api from "@/lib/api"
 
 interface DetalhesRegistroProps {
   onNavigate: (page: string, data?: any) => void
@@ -55,79 +72,83 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
   const [markReadyDialogOpen, setMarkReadyDialogOpen] = useState(false)
   const [markDeliveredDialogOpen, setMarkDeliveredDialogOpen] = useState(false)
 
-  // Mock detailed data - in real app this would come from API
-  const ticketDetails = data || {
-    id: "O1",
-    tombamento: "202259123",
-    status: "ENTRADA",
-    unidade: "USF RIO DAS VELHAS II",
-    tecnico: "João Silva",
-    ambiente: "MÉDICO",
-    tipo: "DESKTOP",
-    descricao: "Computador não liga após queda de energia. Verificar fonte e componentes internos.",
-    dataAbertura: "2025-01-15 14:30",
-    dataUltimaAtualizacao: "2025-01-15 16:45",
-    dataSaida: "2025-01-18 10:15",
-    observacoes: "Cliente relatou que o problema começou após tempestade na região.",
-  }
+  // Real ticket details state
+  const [ticketDetails, setTicketDetails] = useState<any>(data || null)
+  const [ticketLoading, setTicketLoading] = useState(false)
+  const [ticketError, setTicketError] = useState<string | null>(null)
+
+  // Fetch real ticket details if not provided
+  useEffect(() => {
+    if (data) {
+      setTicketDetails(data)
+      return
+    }
+    // Try to get id from URL or context if needed (here, assume id is passed in data or via prop)
+    // If not, do nothing
+    if (!ticketDetails?.id && !data?.id) return
+    setTicketLoading(true)
+    setTicketError(null)
+    api.get(`/equipamentos/${data?.id || ticketDetails?.id}`)
+      .then(res => setTicketDetails(res.data))
+      .catch(() => setTicketError('Erro ao buscar detalhes do registro'))
+      .finally(() => setTicketLoading(false))
+  }, [data])
 
   // Edit form state
   const [editFormData, setEditFormData] = useState({
-    tombamento: ticketDetails.tombamento,
-    ambiente: ticketDetails.ambiente,
-    tipo: ticketDetails.tipo,
-    unidade: ticketDetails.unidade,
-    descricao: ticketDetails.descricao,
-    tecnico: ticketDetails.tecnico,
+    tombamento: ticketDetails?.tombamento || '',
+    ambiente: ticketDetails?.ambiente || '',
+    tipo: ticketDetails?.tipo || '',
+    unidade: ticketDetails?.unidade || '',
+    descricao: ticketDetails?.descricao || '',
+    tecnico: ticketDetails?.tecnico || '',
   })
 
-  const unidades = ["USF RIO DAS VELHAS II", "USF QUADROS III", "USF VIETNÃ", "USF CENTRO", "USF NORTE"]
-  const tecnicos = ["João Silva", "Maria Santos", "Pedro Costa", "Ana Lima", "Carlos Oliveira"]
+  const [unidades, setUnidades] = useState<{ idUnidade: number, nomeUnidade: string }[]>([])
+  const [tecnicos, setTecnicos] = useState<string[]>([])
 
-  // Mock related tickets
-  const relatedTickets = [
-    {
-      id: "O5",
-      tombamento: "202259127",
-      status: "PRONTO",
-      unidade: "USF RIO DAS VELHAS II",
-      descricao: "Problema similar resolvido",
-      dataAbertura: "2025-01-10",
-    },
-    {
-      id: "O8",
-      tombamento: "202259130",
-      status: "ENTRADA",
-      unidade: "USF RIO DAS VELHAS II",
-      descricao: "Mesmo setor - verificar rede elétrica",
-      dataAbertura: "2025-01-14",
-    },
-  ]
+  useEffect(() => {
+    // Fetch unidades
+    api.get('/unidades').then(res => {
+      if (Array.isArray(res.data)) {
+        setUnidades(res.data.map((u: any) => ({ idUnidade: u.idUnidade, nomeUnidade: u.nomeUnidade })))
+      }
+    })
+    // Fetch tecnicos
+    api.get('/tecnicos').then(res => {
+      if (Array.isArray(res.data)) {
+        setTecnicos(res.data.map((t: any) => t.nomeTec))
+      }
+    })
+  }, [])
 
-  // Mock history
-  const ticketHistory = [
-    {
-      id: 1,
-      acao: "Ticket criado",
-      usuario: "João Silva",
-      data: "2025-01-15 14:30",
-      detalhes: "Abertura do chamado",
-    },
-    {
-      id: 2,
-      acao: "Status atualizado",
-      usuario: "Sistema",
-      data: "2025-01-15 14:31",
-      detalhes: "Status alterado para ENTRADA",
-    },
-    {
-      id: 3,
-      acao: "Observação adicionada",
-      usuario: "João Silva",
-      data: "2025-01-15 16:45",
-      detalhes: "Adicionada observação sobre tempestade",
-    },
-  ]
+  // Real related tickets and history
+  const [relatedTickets, setRelatedTickets] = useState<any[]>([])
+  const [relatedLoading, setRelatedLoading] = useState(false)
+  const [relatedError, setRelatedError] = useState<string | null>(null)
+  const [ticketHistory, setTicketHistory] = useState<any[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!ticketDetails?.id) return;
+    setRelatedLoading(true)
+    setRelatedError(null)
+    api.get(`/equipamentos/${ticketDetails.id}/relacionados`)
+      .then(res => setRelatedTickets(res.data || []))
+      .catch(() => setRelatedError('Erro ao buscar chamados relacionados'))
+      .finally(() => setRelatedLoading(false))
+  }, [ticketDetails.id])
+
+  useEffect(() => {
+    if (!ticketDetails?.id) return;
+    setHistoryLoading(true)
+    setHistoryError(null)
+    api.get(`/equipamentos/${ticketDetails.id}/historico`)
+      .then(res => setTicketHistory(res.data || []))
+      .catch(() => setHistoryError('Erro ao buscar histórico'))
+      .finally(() => setHistoryLoading(false))
+  }, [ticketDetails.id])
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -155,46 +176,81 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
     }
   }
 
-  const handlePrintLabel = () => {
-    toast.success("Etiqueta enviada para impressão", {
-      duration: 3000,
-      position: "top-right",
-    })
-    setPrintDialogOpen(false)
+  // --- API Actions ---
+  const handleMarkAsReady = async () => {
+    try {
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "PRONTO" })
+      toast.success(`Registro ${ticketDetails.tombamento} marcado como PRONTO`, {
+        duration: 3000,
+        position: "top-right",
+      })
+      setMarkReadyDialogOpen(false)
+      // Optionally refresh data here
+    } catch (err) {
+      toast.error("Erro ao marcar como PRONTO")
+    }
   }
 
-  const handleDeleteRecord = () => {
-    toast.success(`Registro ${ticketDetails.tombamento} foi excluído com sucesso`, {
-      duration: 3000,
-      position: "top-right",
-    })
-    setDeleteDialogOpen(false)
-    onNavigate("home")
+  const handleMarkAsDelivered = async () => {
+    try {
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "SAÍDA" })
+      toast.success(`Registro ${ticketDetails.tombamento} marcado como SAÍDA`, {
+        duration: 3000,
+        position: "top-right",
+      })
+      setMarkDeliveredDialogOpen(false)
+      // Optionally refresh data here
+    } catch (err) {
+      toast.error("Erro ao marcar como SAÍDA")
+    }
   }
 
-  const handleMarkAsReady = () => {
-    toast.success(`Registro ${ticketDetails.tombamento} marcado como PRONTO`, {
-      duration: 3000,
-      position: "top-right",
-    })
-    setMarkReadyDialogOpen(false)
+  const handlePrintLabel = async () => {
+    try {
+      // Download or print the label (ZPL)
+      const res = await api.get(`/equipamentos/${ticketDetails.id}/etiqueta`, { responseType: 'blob' })
+      // Optionally trigger print or download
+      toast.success("Etiqueta gerada com sucesso", { duration: 3000, position: "top-right" })
+      setPrintDialogOpen(false)
+    } catch (err) {
+      toast.error("Erro ao gerar etiqueta")
+    }
   }
 
-  const handleMarkAsDelivered = () => {
-    toast.success(`Registro ${ticketDetails.tombamento} marcado como SAÍDA`, {
-      duration: 3000,
-      position: "top-right",
-    })
-    setMarkDeliveredDialogOpen(false)
+  const handleDeleteRecord = async () => {
+    try {
+      await api.delete(`/equipamentos/${ticketDetails.id}`)
+      toast.success(`Registro ${ticketDetails.tombamento} foi excluído com sucesso`, {
+        duration: 3000,
+        position: "top-right",
+      })
+      setDeleteDialogOpen(false)
+      onNavigate("home")
+    } catch (err) {
+      toast.error("Erro ao excluir registro")
+    }
   }
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    toast.success(`Registro ${ticketDetails.tombamento} foi atualizado com sucesso`, {
-      duration: 3000,
-      position: "top-right",
-    })
-    setEditDialogOpen(false)
+    try {
+      await api.put(`/equipamentos/${ticketDetails.id}`, {
+        idTomb: editFormData.tombamento,
+        ambiente: editFormData.ambiente,
+        tipo: editFormData.tipo,
+        descDefeito: editFormData.descricao,
+        unidade: editFormData.unidade,
+        tecnico: editFormData.tecnico,
+      })
+      toast.success(`Registro ${ticketDetails.tombamento} foi atualizado com sucesso`, {
+        duration: 3000,
+        position: "top-right",
+      })
+      setEditDialogOpen(false)
+      // Optionally refresh data here
+    } catch (err) {
+      toast.error("Erro ao atualizar registro")
+    }
   }
 
   const isEditFormValid =
@@ -203,6 +259,52 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
     editFormData.unidade &&
     editFormData.descricao &&
     editFormData.tecnico
+
+  // Atualiza os dados do formulário de edição ao abrir o popup
+  useEffect(() => {
+    if (editDialogOpen && ticketDetails) {
+      setEditFormData({
+        tombamento: ticketDetails.tombamento,
+        ambiente: ticketDetails.ambiente,
+        tipo: ticketDetails.tipo,
+        unidade: ticketDetails.unidade,
+        descricao: ticketDetails.descricao,
+        tecnico: ticketDetails.tecnico,
+      })
+    }
+  }, [editDialogOpen, ticketDetails])
+
+  // Atualiza os dados do formulário de edição ao abrir o popup, garantindo que os selects estejam pré-selecionados
+  useEffect(() => {
+    if (editDialogOpen && unidades.length && tecnicos.length && ticketDetails) {
+      setEditFormData(prev => ({
+        tombamento: ticketDetails.tombamento,
+        ambiente: ticketDetails.ambiente,
+        tipo: ticketDetails.tipo,
+        unidade: unidades.includes(ticketDetails.unidade) ? ticketDetails.unidade : unidades[0],
+        descricao: ticketDetails.descricao,
+        tecnico: tecnicos.includes(ticketDetails.tecnico) ? ticketDetails.tecnico : tecnicos[0],
+      }))
+    }
+  }, [editDialogOpen, ticketDetails, unidades, tecnicos])
+
+  if (ticketLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#191818] text-white">
+        <span className="text-2xl font-arial">Carregando detalhes do registro...</span>
+      </div>
+    )
+  }
+  if (ticketError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#191818] text-white">
+        <span className="text-2xl text-red-400 font-arial">{ticketError}</span>
+      </div>
+    )
+  }
+  if (!ticketDetails) {
+    return null
+  }
 
   return (
     <div className="min-h-screen bg-[#191818] text-white">
@@ -340,7 +442,9 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                       <MapPin className="h-4 w-4" />
                       UNIDADE
                     </label>
-                    <p className="text-white font-bold text-lg font-abel">{ticketDetails.unidade}</p>
+                    <p className="text-white font-bold text-lg font-abel">
+                      {unidades.find(u => u.idUnidade === ticketDetails.unidade)?.nomeUnidade || ticketDetails.unidade}
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#E9A870] font-arial">AMBIENTE</label>
@@ -377,14 +481,14 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                       <Calendar className="h-4 w-4" />
                       DATA DE ABERTURA
                     </label>
-                    <p className="text-white text-base font-arial">{ticketDetails.dataAbertura}</p>
+                    <p className="text-white text-base font-arial">{formatDateTime(ticketDetails.dataEntrada)}</p>
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#E9A870] flex items-center gap-1 font-arial">
                       <Calendar className="h-4 w-4" />
                       ÚLTIMA ATUALIZAÇÃO
                     </label>
-                    <p className="text-white text-base font-arial">{ticketDetails.dataUltimaAtualizacao}</p>
+                    <p className="text-white text-base font-arial">{formatDateTime(ticketDetails.dataSaida || ticketDetails.dataEntrada)}</p>
                   </div>
                 </div>
 
@@ -681,11 +785,11 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                                 <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
                                   {unidades.map((unidade) => (
                                     <SelectItem
-                                      key={unidade}
-                                      value={unidade}
+                                      key={unidade.idUnidade}
+                                      value={String(unidade.idUnidade)}
                                       className="focus:bg-[#E9A870]/20 font-arial"
                                     >
-                                      {unidade}
+                                      {unidade.nomeUnidade}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -766,29 +870,37 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                 <h3 className="text-lg font-bold text-black font-arial">CHAMADOS RELACIONADOS</h3>
               </CardHeader>
               <CardContent className="p-4 bg-[#1C1815] custom-scroll">
-                <div className="space-y-3">
-                  {relatedTickets.map((ticket) => (
-                    <div
-                      key={ticket.id}
-                      className="p-3 bg-[#121212] rounded-lg border border-[#E9A870]/20 hover:bg-[#262626] transition-colors cursor-pointer"
-                      onClick={() => onNavigate("detalhes", ticket)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-bold text-white text-base font-abel">{ticket.id}</span>
-                        <div className="flex items-center gap-1">
-                          {getStatusIcon(ticket.status)}
-                          <Badge className={`${getStatusColor(ticket.status)} text-sm font-arial`}>
-                            {ticket.status}
-                          </Badge>
+                {relatedLoading ? (
+                  <div className="text-gray-400 font-arial">Carregando...</div>
+                ) : relatedError ? (
+                  <div className="text-red-400 font-arial">{relatedError}</div>
+                ) : relatedTickets.length === 0 ? (
+                  <div className="text-gray-400 font-arial">Nenhum chamado relacionado encontrado.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {relatedTickets.map((ticket) => (
+                      <div
+                        key={ticket.id}
+                        className="p-3 bg-[#121212] rounded-lg border border-[#E9A870]/20 hover:bg-[#262626] transition-colors cursor-pointer"
+                        onClick={() => onNavigate("detalhes", ticket)}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-bold text-white text-base font-abel">{ticket.id}</span>
+                          <div className="flex items-center gap-1">
+                            {getStatusIcon(ticket.status)}
+                            <Badge className={`${getStatusColor(ticket.status)} text-sm font-arial`}>
+                              {ticket.status}
+                            </Badge>
+                          </div>
                         </div>
+                        <p className="text-sm text-gray-300 mb-1 font-arial">{ticket.tombamento}</p>
+                        <p className="text-sm text-gray-400 mb-2 font-arial">{ticket.unidade}</p>
+                        <p className="text-sm text-white font-arial">{ticket.descricao}</p>
+                        <p className="text-sm text-[#E9A870] mt-1 font-arial">{ticket.dataAbertura}</p>
                       </div>
-                      <p className="text-sm text-gray-300 mb-1 font-arial">{ticket.tombamento}</p>
-                      <p className="text-sm text-gray-400 mb-2 font-arial">{ticket.unidade}</p>
-                      <p className="text-sm text-white font-arial">{ticket.descricao}</p>
-                      <p className="text-sm text-[#E9A870] mt-1 font-arial">{ticket.dataAbertura}</p>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -801,24 +913,32 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                 </h3>
               </CardHeader>
               <CardContent className="p-4 bg-[#1C1815] custom-scroll">
-                <div className="space-y-3 max-h-96 overflow-y-auto custom-scroll">
-                  {ticketHistory.map((item, index) => (
-                    <div
-                      key={item.id}
-                      className="flex items-start gap-3 p-3 bg-[#121212] rounded-lg border border-[#E9A870]/20 hover:bg-[#262626] transition-colors"
-                    >
-                      <div className="w-2 h-2 bg-[#E9A870] rounded-full mt-2 flex-shrink-0"></div>
-                      <div className="flex-1">
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="font-bold text-white text-sm font-arial">{item.acao}</h4>
-                          <span className="text-sm text-gray-400 font-arial">{item.data}</span>
+                {historyLoading ? (
+                  <div className="text-gray-400 font-arial">Carregando...</div>
+                ) : historyError ? (
+                  <div className="text-red-400 font-arial">{historyError}</div>
+                ) : ticketHistory.length === 0 ? (
+                  <div className="text-gray-400 font-arial">Nenhum histórico encontrado.</div>
+                ) : (
+                  <div className="space-y-3 max-h-96 overflow-y-auto custom-scroll">
+                    {ticketHistory.map((item, index) => (
+                      <div
+                        key={item.id || index}
+                        className="flex items-start gap-3 p-3 bg-[#121212] rounded-lg border border-[#E9A870]/20 hover:bg-[#262626] transition-colors"
+                      >
+                        <div className="w-2 h-2 bg-[#E9A870] rounded-full mt-2 flex-shrink-0"></div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <h4 className="font-bold text-white text-sm font-arial">{item.acao}</h4>
+                            <span className="text-sm text-gray-400 font-arial">{item.data}</span>
+                          </div>
+                          <p className="text-sm text-gray-300 mb-1 font-arial">{item.detalhes}</p>
+                          <p className="text-sm text-[#E9A870] font-arial">por {item.usuario}</p>
                         </div>
-                        <p className="text-sm text-gray-300 mb-1 font-arial">{item.detalhes}</p>
-                        <p className="text-sm text-[#E9A870] font-arial">por {item.usuario}</p>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>

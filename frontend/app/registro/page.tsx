@@ -1,8 +1,9 @@
 "use client"
 
 import type React from "react"
+import api from "@/lib/api"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -26,20 +27,35 @@ export default function Registro({ onNavigate }: RegistroProps) {
     descricao: "",
     tecnico: "",
   })
+  const [unidades, setUnidades] = useState<{ idUnidade: number; nomeUnidade: string }[]>([])
+  const [tecnicos, setTecnicos] = useState<{ idTec: number; nomeTec: string }[]>([])
 
-  const unidades = ["USF RIO DAS VELHAS II", "USF QUADROS III", "USF VIETNÃ", "USF CENTRO", "USF NORTE"]
+  useEffect(() => {
+    api.get("/unidades").then((res) => setUnidades(res.data)).catch(() => toast.error("Erro ao carregar unidades"))
+    api.get("/tecnicos").then((res) => setTecnicos(res.data)).catch(() => toast.error("Erro ao carregar técnicos"))
+  }, [])
 
-  const tecnicos = ["João Silva", "Maria Santos", "Pedro Costa", "Ana Lima", "Carlos Oliveira"]
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // Here you would normally submit the form data
-    console.log("Form submitted:", formData)
-    toast.success("Chamado registrado com sucesso!", {
-      duration: 3000,
-      position: "top-right",
-    })
-    onNavigate("home")
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      // Map frontend fields to backend fields
+      const payload = {
+        idTomb: formData.tombamento,
+        ambiente: formData.ambiente,
+        tipo: formData.tipo,
+        descDefeito: formData.descricao,
+        idUnidade: Number(formData.unidade),
+        idTecnico: Number(formData.tecnico),
+      };
+      await api.post("/equipamentos", payload);
+      toast.success("Chamado registrado com sucesso!", {
+        duration: 3000,
+        position: "top-right",
+      });
+      onNavigate("home");
+    } catch (err) {
+      toast.error("Erro ao registrar chamado. Verifique os dados e tente novamente.");
+    }
   }
 
   const isFormValid =
@@ -123,7 +139,7 @@ export default function Registro({ onNavigate }: RegistroProps) {
             </CardHeader>
 
             <CardContent className="p-8 bg-[#1C1815] space-y-6 custom-scroll">
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleSubmit} className="space-y-6 custom-scroll max-h-[70vh] overflow-y-auto p-1">
                 {/* First Row */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
@@ -170,13 +186,13 @@ export default function Registro({ onNavigate }: RegistroProps) {
                     value={formData.unidade}
                     onValueChange={(value) => setFormData({ ...formData, unidade: value })}
                   >
-                    <SelectTrigger className="bg-[#121212] border-[#E9A870]/30 text-white focus:border-[#E9A870] font-abel h-12 text-base">
-                      <SelectValue placeholder="SELECIONE A UNIDADE" />
+                    <SelectTrigger className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200">
+                      <SelectValue placeholder="Selecione" />
                     </SelectTrigger>
                     <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
-                      {unidades.map((unidade) => (
-                        <SelectItem key={unidade} value={unidade} className="focus:bg-[#E9A870]/20 font-arial">
-                          {unidade}
+                      {unidades.map((u) => (
+                        <SelectItem key={u.idUnidade} value={u.idUnidade.toString()}>
+                          {u.nomeUnidade}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -205,13 +221,13 @@ export default function Registro({ onNavigate }: RegistroProps) {
                       value={formData.tecnico}
                       onValueChange={(value) => setFormData({ ...formData, tecnico: value })}
                     >
-                      <SelectTrigger className="bg-[#121212] border-[#E9A870]/30 text-white focus:border-[#E9A870] font-abel h-12 text-base">
-                        <SelectValue placeholder="TÉCNICO" />
+                      <SelectTrigger className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200">
+                        <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
-                        {tecnicos.map((tecnico) => (
-                          <SelectItem key={tecnico} value={tecnico} className="focus:bg-[#E9A870]/20 font-arial">
-                            {tecnico}
+                        {tecnicos.map((t) => (
+                          <SelectItem key={t.idTec} value={t.idTec.toString()}>
+                            {t.nomeTec}
                           </SelectItem>
                         ))}
                       </SelectContent>

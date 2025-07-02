@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import debounce from "lodash.debounce"
+import api from "@/lib/api"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -38,61 +39,25 @@ import { cn } from "@/lib/utils"
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { toast, Toaster } from "sonner"
 
-// Mock data for computers
-const mockComputers = [
-  {
-    id: "O1",
-    tombamento: "202259123",
-    status: "ENTRADA",
-    statusColor: "red",
-    unidade: "USF RIO DAS VELHAS II",
-    priority: "high",
-    timestamp: "2h atrás",
-    tecnico: "João Silva",
-    ambiente: "MÉDICO",
-    tipo: "DESKTOP",
-    descricao: "Computador não liga",
-  },
-  {
-    id: "O2",
-    tombamento: "202259124",
-    status: "SAÍDA",
-    statusColor: "green",
-    unidade: "USF QUADROS III",
-    priority: "normal",
-    timestamp: "1h atrás",
-    tecnico: "Maria Santos",
-    ambiente: "RECEPÇÃO",
-    tipo: "NOTEBOOK",
-    descricao: "Problema no teclado",
-  },
-  {
-    id: "O3",
-    tombamento: "202259125",
-    status: "PRONTO",
-    statusColor: "blue",
-    unidade: "USF VIETNÃ",
-    priority: "normal",
-    timestamp: "30min atrás",
-    tecnico: "Pedro Costa",
-    ambiente: "ENFERMARIA",
-    tipo: "DESKTOP",
-    descricao: "Lentidão no sistema",
-  },
-  {
-    id: "O4",
-    tombamento: "202259126",
-    status: "ENTRADA",
-    statusColor: "red",
-    unidade: "USF RIO DAS VELHAS II",
-    priority: "urgent",
-    timestamp: "15min atrás",
-    tecnico: "Ana Lima",
-    ambiente: "LABORATÓRIO",
-    tipo: "DESKTOP",
-    descricao: "Tela azul frequente",
-  },
-]
+// Define the Computer type based on your backend data structure
+interface Computer {
+  id: number; // idEquip
+  tombamento: number; // idTomb
+  status: string;
+  unidade: number | null; // idUnidade
+  tecnico: number | null; // idTecnico
+  ambiente: string;
+  tipo?: string;
+  descricao: string; // descDefeito
+  dataEntrada?: string;
+  dataSaida?: string | null;
+  codigoEtiqueta?: string | null;
+}
+
+interface Unidade {
+  idUnidade: number;
+  nomeUnidade: string;
+}
 
 interface DashboardProps {
   onNavigate: (page: string, data?: any) => void
@@ -103,7 +68,9 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
-  const [filteredComputers, setFilteredComputers] = useState(mockComputers)
+  const [computers, setComputers] = useState<Computer[]>([])
+  const [filteredComputers, setFilteredComputers] = useState<Computer[]>([])
+  const [unidades, setUnidades] = useState<Unidade[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [statusFilter, setStatusFilter] = useState<string | null>(null)
   const [unidadeFilter, setUnidadeFilter] = useState<string | null>(null)
@@ -115,47 +82,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const [notifications, setNotifications] = useState([
     {
       id: 1,
-      title: "Novo computador adicionado",
-      time: "Agora mesmo",
-      read: false,
+      title: "Bem-vindo ao AGNUS",
+      time: "SYSTEM INFO",
+      read: true,
       type: "info",
-    },
-    {
-      id: 2,
-      title: "Manutenção concluída",
-      time: "5 minutos atrás",
-      read: false,
-      type: "success",
-    },
-    {
-      id: 3,
-      title: "Alerta de sistema",
-      time: "1 hora atrás",
-      read: true,
-      type: "warning",
-    },
-    {
-      id: 4,
-      title: "Técnico João Silva finalizou reparo",
-      time: "2 horas atrás",
-      read: false,
-      type: "success",
-    },
-    {
-      id: 5,
-      title: "USF Centro com alta demanda",
-      time: "3 horas atrás",
-      read: true,
-      type: "warning",
-    },
+    }
   ])
 
   const tabs = ["TODOS", "RECOLHIDOS", "ENTREGUES"]
-  const readyItems = [
-    { text: "MÉDICO - USF RIO DAS VELHAS II", id: "O5", tombamento: "202259127", timestamp: "Pronto há 2h" },
-    { text: "ENFERMEIRA - USF QUADROS III", id: "O6", tombamento: "202259128", timestamp: "Pronto há 1h" },
-    { text: "RECEPÇÃO - USF VIETNÃ", id: "O7", tombamento: "202259129", timestamp: "Pronto há 30min" },
-  ]
 
   // Handle search
   useEffect(() => {
@@ -203,22 +137,56 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     [],
   )
 
+  // Fetch equipamentos from backend
+  useEffect(() => {
+    setIsLoading(true)
+    api.get("/equipamentos")
+      .then((res: { data: any[] }) => {
+        const mapped = res.data.map((item) => ({
+          id: item.idEquip,
+          tombamento: item.idTomb,
+          status: item.status,
+          unidade: item.idUnidade,
+          tecnico: item.idTecnico,
+          ambiente: item.ambiente,
+          tipo: item.tipo,
+          descricao: item.descDefeito,
+          dataEntrada: item.dataEntrada,
+          dataSaida: item.dataSaida,
+          codigoEtiqueta: item.codigoEtiqueta,
+        }))
+        setComputers(mapped)
+        setFilteredComputers(mapped)
+      })
+      .catch((err: unknown) => {
+        toast.error("Erro ao carregar equipamentos")
+      })
+      .finally(() => setIsLoading(false))
+  }, [])
+
+  // Fetch unidades on mount
+  useEffect(() => {
+    api.get("/unidades")
+      .then((res: { data: Unidade[] }) => setUnidades(res.data))
+      .catch(() => toast.error("Erro ao carregar unidades"))
+  }, [])
+
   // Filter computers based on search, status, and unidade
   useEffect(() => {
     if (debouncedSearch || statusFilter || unidadeFilter || activeTab !== "TODOS") {
       setIsLoading(true)
       const timer = setTimeout(() => {
-        let filtered = mockComputers
+        let filtered = computers
 
         // Apply search filter
         if (debouncedSearch) {
           filtered = filtered.filter(
             (computer) =>
-              computer.id.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-              computer.tombamento.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-              computer.unidade.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+              computer.id.toString().includes(debouncedSearch) ||
+              computer.tombamento.toString().includes(debouncedSearch) ||
+              (computer.unidade !== null && computer.unidade.toString().includes(debouncedSearch)) ||
               computer.status.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-              computer.tecnico.toLowerCase().includes(debouncedSearch.toLowerCase()),
+              (computer.tecnico !== null && computer.tecnico.toString().includes(debouncedSearch))
           )
         }
 
@@ -229,7 +197,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
         // Apply unidade filter
         if (unidadeFilter) {
-          filtered = filtered.filter((computer) => computer.unidade === unidadeFilter)
+          filtered = filtered.filter((computer) => computer.unidade?.toString() === unidadeFilter)
         }
 
         // Apply tab filter
@@ -244,10 +212,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       }, 0)
       return () => clearTimeout(timer)
     } else {
-      setFilteredComputers(mockComputers)
+      setFilteredComputers(computers)
       setIsLoading(false)
     }
-  }, [debouncedSearch, statusFilter, unidadeFilter, activeTab])
+  }, [debouncedSearch, statusFilter, unidadeFilter, activeTab, computers])
 
   // Notification functions
   const markAllAsRead = () => {
@@ -343,14 +311,23 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   )
   const TableSkeleton = useMemo(() => React.memo(TableSkeletonComponent), [])
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (computerToDelete) {
-      toast.success(`Registro ${computerToDelete.tombamento} foi excluído com sucesso`, {
-        duration: 3000,
-        position: "top-right",
-      })
-      setDeleteDialogOpen(false)
-      setComputerToDelete(null)
+      try {
+        await api.delete(`/equipamentos/${computerToDelete.id}`)
+        toast.success(`Registro ${computerToDelete.tombamento} foi excluído com sucesso`, {
+          duration: 3000,
+          position: "top-right",
+        })
+        // Remove from state
+        setComputers((prev) => prev.filter((c) => c.id !== computerToDelete.id))
+        setFilteredComputers((prev) => prev.filter((c) => c.id !== computerToDelete.id))
+      } catch (err) {
+        toast.error("Erro ao excluir registro")
+      } finally {
+        setDeleteDialogOpen(false)
+        setComputerToDelete(null)
+      }
     }
   }
 
@@ -668,7 +645,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </div>
 
           {/* Table - Full Width with Edge-to-Edge Borders */}
-          <div className="flex-1 px-6 pb-6">
+          <div className="flex-1 px-6 flex-1 pr-12 pl-12 pb-12">
             <div className="bg-[#1C1815] border-[#E9A870] border-2 rounded-xl overflow-hidden shadow-2xl backdrop-blur-sm hover:shadow-[#E9A870]/10 transition-all duration-300 h-full flex flex-col">
               <div className="bg-gradient-to-r from-[#E9A870] to-[#A8784F] p-0 flex-shrink-0">
                 <div className="grid grid-cols-5 gap-6 px-6 py-4 text-black font-bold text-lg font-arial">
@@ -679,14 +656,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   <div>AÇÕES</div>
                 </div>
               </div>
-              <div className="flex-1 bg-[#1C1815] custom-scroll overflow-y-auto">
+              <div className="custom-scroll overflow-y-auto" style={{ maxHeight: '540px' }}>
                 {isLoading ? (
                   <TableSkeleton />
                 ) : filteredComputers.length > 0 ? (
                   filteredComputers.map((computer, index) => {
                     const { ledColor, icon, pulseClass, baseClasses } = getStatusIndicator(
-                      computer.status,
-                      computer.priority,
+                      computer.status
                     )
                     return (
                       <div
@@ -707,10 +683,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         </div>
                         <div className="text-gray-300 group-hover:text-white transition-colors font-bold text-base font-abel">
                           <button
-                            onClick={(e) => handleTecnicoClick(computer.tecnico, e)}
+                            onClick={(e) => handleTecnicoClick(computer.tecnico?.toString() ?? "", e)}
                             className="hover:text-[#E9A870] transition-colors"
                           >
-                            {computer.unidade}
+                            {unidades.find(u => u.idUnidade === computer.unidade)?.nomeUnidade ?? computer.unidade}
                           </button>
                         </div>
                         <div className="text-gray-300 group-hover:text-white transition-colors text-center text-base font-abel">
@@ -731,48 +707,56 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRowClick(computer);
+                            }}
                             className="h-8 w-8 hover:bg-gradient-to-r hover:from-gray-700/50 hover:to-gray-600/50 transition-all duration-200 hover:scale-110"
                           >
                             <Edit className="h-4 w-4 text-[#E0CAA5]" />
                           </Button>
-                          <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                            <AlertDialogTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                onClick={(e) => handleDeleteClick(computer, e)}
-                                className="h-8 w-8 hover:bg-gradient-to-r hover:from-red-700/50 hover:to-red-600/50 transition-all duration-200 hover:scale-110"
-                              >
-                                <Trash2 className="h-4 w-4 text-red-400" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="bg-[#1C1815] border-[#E9A870] text-white">
-                              <AlertDialogHeader>
-                                <AlertDialogTitle className="text-[#E9A870] text-xl font-abel">
-                                  Confirmar Exclusão
-                                </AlertDialogTitle>
-                                <AlertDialogDescription className="text-gray-300 font-arial">
-                                  Tem certeza que deseja excluir o registro do computador{" "}
-                                  <span className="font-bold text-white">{computerToDelete?.tombamento}</span>?
-                                  <br />
-                                  <span className="text-red-400 text-sm">Esta ação não pode ser desfeita.</span>
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500">
-                                  Cancelar
-                                </AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={confirmDelete}
-                                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Excluir
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={(e) => handleDeleteClick(computer, e)}
+                            className="h-8 w-8 hover:bg-gradient-to-r hover:from-red-700/50 hover:to-red-600/50 transition-all duration-200 hover:scale-110"
+                          >
+                            <Trash2 className="h-4 w-4 text-red-400" />
+                          </Button>
+      {/* Global Delete Dialog (outside map) */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={(open) => {
+        setDeleteDialogOpen(open)
+        if (!open) setComputerToDelete(null)
+      }}>
+        <AlertDialogContent className="bg-[#1C1815] border-[#E9A870] text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-[#E9A870] text-xl font-abel">
+              Confirmar Exclusão
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-gray-300 font-arial">
+              Tem certeza que deseja excluir o registro do computador{" "}
+              <span className="font-bold text-white">{computerToDelete?.tombamento}</span>?
+              <br />
+              <span className="text-red-400 text-sm">Esta ação não pode ser desfeita.</span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={e => {
+                e.stopPropagation();
+                confirmDelete();
+              }}
+              className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
                         </div>
                       </div>
                     )
@@ -788,44 +772,47 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         </div>
 
         {/* Right Sidebar - Full Height */}
-        <div className="w-72 border-l border-[#E9A870] bg-[#191818] flex-shrink-0 flex flex-col">
-          <div className="p-6 flex-1 custom-scroll">
-            <h3 className="text-[32px] font-afacad bg-gradient-to-r from-[#E9A870] via-[#E0CAA5] to-[#A8784F] bg-clip-text text-transparent font-semibold mb-6 leading-tight text-center drop-shadow-sm">
+        <div className="w-172 border-l border-[#E9A870] bg-[#191818] flex-shrink-0 flex flex-col">
+            <div className="p-3 flex-1 custom-scroll">
+            <h3 className="text-[42px] font-afacad bg-gradient-to-r from-[#E9A870] via-[#E0CAA5] to-[#A8784F] bg-clip-text text-transparent font-semibold mb-6 leading-tight text-center drop-shadow-sm">
               PRONTOS
             </h3>
 
             <div className="space-y-4">
-              {readyItems.map((item, index) => (
-                <div
-                  key={index}
-                  className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-gradient-to-r hover:from-gray-800/50 hover:to-gray-700/50 transition-all duration-300 hover:shadow-md group border border-transparent hover:border-[#E9A870]/20 hover:scale-105 hover:-translate-y-1 cursor-pointer"
-                  style={{ animationDelay: `${index * 150}ms` }}
-                  onClick={() => onNavigate("detalhes", { id: item.id, tombamento: item.tombamento })}
-                >
-                  <div className="flex items-center gap-4 flex-1">
-                    <div className="flex flex-col items-center gap-1">
-                      <CheckCircle className="h-3 w-3 text-blue-400 group-hover:scale-110 transition-transform duration-200" />
-                      <div className="w-3 h-3 bg-blue-600 rounded-full shadow-sm group-hover:shadow-lg transition-shadow duration-200"></div>
-                    </div>
-                    <div className="flex-1">
-                      <span className="text-sm text-gray-300 leading-relaxed group-hover:text-white transition-colors font-arial">
-                        {item.text}
-                      </span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-sm text-gray-500 font-arial">TOMBAMENTO: {item.tombamento}</span>
-                        <span className="text-sm text-blue-400 font-arial">• {item.timestamp}</span>
+              {computers.filter((c) => c.status === "PRONTO").map((item, index) => {
+                const unidadeObj = unidades.find(u => u.idUnidade === item.unidade)
+                return (
+                  <div
+                    key={item.id}
+                    className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-gradient-to-r hover:from-gray-800/50 hover:to-gray-700/50 transition-all duration-300 hover:shadow-md group border border-transparent hover:border-[#E9A870]/20 hover:scale-105 hover:-translate-y-1 cursor-pointer"
+                    style={{ animationDelay: `${index * 150}ms` }}
+                    onClick={() => onNavigate("detalhes", { id: item.id, tombamento: item.tombamento })}
+                  >
+                    <div className="flex items-center gap-4 flex-1">
+                      <div className="flex flex-col items-center gap-1">
+                        <CheckCircle className="h-3 w-3 text-blue-400 group-hover:scale-110 transition-transform duration-200" />
+                        <div className="w-3 h-3 bg-blue-600 rounded-full shadow-sm group-hover:shadow-lg transition-shadow duration-200"></div>
+                      </div>
+                      <div className="flex-1">
+                        <span className="text-sm text-gray-300 leading-relaxed group-hover:text-white transition-colors font-arial">
+                          {item.ambiente} - {unidadeObj ? unidadeObj.nomeUnidade : item.unidade}
+                        </span>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-sm text-gray-500 font-arial">TOMBAMENTO: {item.tombamento}</span>
+                          {/* You can add a timestamp if you have one, e.g., item.dataEntrada */}
+                        </div>
                       </div>
                     </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 hover:bg-gradient-to-r hover:from-gray-700/50 hover:to-gray-600/50 transition-all duration-200 hover:scale-110"
+                    >
+                      <Eye className="h-4 w-4 text-[#E0CAA5]" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 hover:bg-gradient-to-r hover:from-gray-700/50 hover:to-gray-600/50 transition-all duration-200 hover:scale-110"
-                  >
-                    <Eye className="h-4 w-4 text-[#E0CAA5]" />
-                  </Button>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </div>
         </div>

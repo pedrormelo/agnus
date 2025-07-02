@@ -172,7 +172,7 @@ export function SidebarMenu({ isOpen, onClose, onNavigate, currentPage = "home" 
               AGNUS - GETI DA SEC. DE SAÚDE -<br />
               JABOATÃO DOS GUARARAPES - JUNHO DE
               <br />
-              2025 - VER: 4.2
+              2025 - VER: BETA 0.1
             </p>
           </div>
         </div>
