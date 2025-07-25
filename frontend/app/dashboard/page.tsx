@@ -30,6 +30,8 @@ import {
   Check,
   Trash2,
   ChevronLeft,
+  Wrench,
+  OctagonX,
 } from "lucide-react"
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -309,11 +311,15 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "ENTRADA":
-        return <Clock className="h-3 w-3 text-red-400" />
-      case "SAÍDA":
-        return <CheckCircle className="h-3 w-3 text-green-400" />
+        return <Clock className="h-3 w-3 text-amber-500" />
+      case "REPARO":
+        return <Wrench className="h-3 w-3 text-teal-200" />
       case "PRONTO":
-        return <AlertTriangle className="h-3 w-3 text-blue-400" />
+        return <AlertTriangle className="h-3 w-3 text-blue-600" />
+      case "DESCARTE":
+        return <OctagonX className="h-3 w-3 text-red-500" />
+      case "SAÍDA":
+        return <CheckCircle className="h-3 w-3 text-green-500" />
       default:
         return <Clock className="h-3 w-3 text-gray-400" />
     }
@@ -322,11 +328,15 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "ENTRADA":
-        return "text-red-400"
-      case "SAÍDA":
-        return "text-green-400"
+        return "bg-amber-500/20 text-amber-500 border-amber-500/30"
+      case "REPARO":
+        return "bg-teal-200/20 text-teal-200 border-teal-200/30"
       case "PRONTO":
-        return "text-blue-400"
+        return "bg-blue-600/20 text-blue-600 border-blue-600/30"
+      case "DESCARTE":
+        return "bg-red-500/20 text-red-500 border-red-500/30"
+      case "SAÍDA":
+        return "bg-green-500/20 text-green-500 border-green-500/30"
       default:
         return "text-gray-400"
     }

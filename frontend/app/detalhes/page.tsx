@@ -1,31 +1,14 @@
-
 "use client"
 
-// Helper to format date/time in a readable way (DD/MM/YYYY HH:mm)
-function formatDateTime(dateString?: string | null) {
-  if (!dateString) return "Não definida";
-  const date = new Date(dateString);
-  if (isNaN(date.getTime())) return dateString;
-  return date.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hour12: false,
-  });
-}
-
-import type React from "react"
-
-import { useState, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+// --- Imports ---
+import React, { useState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,7 +18,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
+} from "@/components/ui/alert-dialog";
 import {
   Menu,
   ChevronLeft,
@@ -54,47 +37,123 @@ import {
   Trash2,
   Edit,
   Check,
-} from "lucide-react"
-import { SidebarMenu } from "@/components/sidebar-menu"
-import { toast, Toaster } from "sonner"
-import api from "@/lib/api"
+  Wrench,
+  OctagonX,
+  CircleCheckBig,
+} from "lucide-react";
+import { SidebarMenu } from "@/components/sidebar-menu";
+import { toast, Toaster } from "sonner";
+import api from "@/lib/api";
 
-interface DetalhesRegistroProps {
-  onNavigate: (page: string, data?: any) => void
-  data?: any
+// --- Utils ---
+function formatDateTime(dateString?: string | null) {
+  if (!dateString) return "Não definida";
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return dateString;
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
+
+// --- Types ---
+interface DetalhesRegistroProps {
+  onNavigate: (page: string, data?: any) => void;
+  data?: any;
+}
+
+
 export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [printDialogOpen, setPrintDialogOpen] = useState(false)
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [editDialogOpen, setEditDialogOpen] = useState(false)
-  const [markReadyDialogOpen, setMarkReadyDialogOpen] = useState(false)
-  const [markDeliveredDialogOpen, setMarkDeliveredDialogOpen] = useState(false)
+  // --- UI State ---
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [printDialogOpen, setPrintDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [markReadyDialogOpen, setMarkReadyDialogOpen] = useState(false);
+  const [markDeliveredDialogOpen, setMarkDeliveredDialogOpen] = useState(false);
 
-  // Real ticket details state
-  const [ticketDetails, setTicketDetails] = useState<any>(data || null)
-  const [ticketLoading, setTicketLoading] = useState(false)
-  const [ticketError, setTicketError] = useState<string | null>(null)
+  // --- Workflow UI State ---
+  const [repairDialogOpen, setRepairDialogOpen] = useState(false);
+  const [selectedTecnico, setSelectedTecnico] = useState<string>("");
+  const [solution, setSolution] = useState("");
+  const [discardDialogOpen, setDiscardDialogOpen] = useState(false);
+  const [discardReason, setDiscardReason] = useState("");
+  const [loadingWorkflow, setLoadingWorkflow] = useState(false);
+  // --- Workflow Handlers ---
 
-  // Fetch real ticket details if not provided
-  useEffect(() => {
-    if (data) {
-      setTicketDetails(data)
-      return
+  // Iniciar Reparo
+  const handleStartRepair = async () => {
+    if (!selectedTecnico) return;
+    setLoadingWorkflow(true);
+    try {
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "REPARO", tecnico: selectedTecnico });
+      toast.success("Reparo iniciado!", { duration: 3000, position: "top-right" });
+      setRepairDialogOpen(false);
+      setSelectedTecnico("");
+      // Optionally refresh data here
+    } catch (err) {
+      toast.error("Erro ao iniciar reparo");
+    } finally {
+      setLoadingWorkflow(false);
     }
-    // Try to get id from URL or context if needed (here, assume id is passed in data or via prop)
-    // If not, do nothing
-    if (!ticketDetails?.id && !data?.id) return
-    setTicketLoading(true)
-    setTicketError(null)
-    api.get(`/equipamentos/${data?.id || ticketDetails?.id}`)
-      .then(res => setTicketDetails(res.data))
-      .catch(() => setTicketError('Erro ao buscar detalhes do registro'))
-      .finally(() => setTicketLoading(false))
-  }, [data])
+  };
 
-  // Edit form state
+  // Concluir Reparo
+  const handleConcludeRepair = async () => {
+    if (!solution) return;
+    setLoadingWorkflow(true);
+    try {
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "PRONTO", solucao: solution });
+      toast.success("Reparo concluído!", { duration: 3000, position: "top-right" });
+      setSolution("");
+      setRepairDialogOpen(false);
+    } catch (err) {
+      toast.error("Erro ao concluir reparo");
+    } finally {
+      setLoadingWorkflow(false);
+    }
+  };
+
+  // Descartar Equipamento
+  const handleDiscard = async () => {
+    if (!discardReason) return;
+    setLoadingWorkflow(true);
+    try {
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "DESCARTE", motivo: discardReason });
+      toast.success("Equipamento descartado!", { duration: 3000, position: "top-right" });
+      setDiscardReason("");
+      setDiscardDialogOpen(false);
+      setRepairDialogOpen(false);
+    } catch (err) {
+      toast.error("Erro ao descartar equipamento");
+    } finally {
+      setLoadingWorkflow(false);
+    }
+  };
+
+  // Marcar como Saída (entrega)
+  const handleMarkAsDeliveredWorkflow = async () => {
+    setLoadingWorkflow(true);
+    try {
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "SAÍDA" });
+      toast.success("Equipamento entregue!", { duration: 3000, position: "top-right" });
+      setMarkDeliveredDialogOpen(false);
+    } catch (err) {
+      toast.error("Erro ao marcar como saída");
+    } finally {
+      setLoadingWorkflow(false);
+    }
+  };
+
+  // --- Data State ---
+  const [ticketDetails, setTicketDetails] = useState<any>(data || null);
+  const [ticketLoading, setTicketLoading] = useState(false);
+  const [ticketError, setTicketError] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState({
     tombamento: ticketDetails?.tombamento || '',
     ambiente: ticketDetails?.ambiente || '',
@@ -102,143 +161,167 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
     unidade: ticketDetails?.unidade || '',
     descricao: ticketDetails?.descricao || '',
     tecnico: ticketDetails?.tecnico ? String(ticketDetails?.tecnico) : '',
-  })
+  });
+  const [unidades, setUnidades] = useState<{ idUnidade: number, nomeUnidade: string }[]>([]);
+  const [tecnicos, setTecnicos] = useState<any[]>([]);
+  // Only internos: filter tecnicos with tipo containing 'interno' (case-insensitive)
+  React.useEffect(() => {
+    if (tecnicos && tecnicos.length > 0) {
+      // Debug: log tecnicos array
+      // Remove or comment this out in production
+      // eslint-disable-next-line no-console
+      //console.log('tecnicos:', tecnicos);
+    }
+  }, [tecnicos]);
 
-  const [unidades, setUnidades] = useState<{ idUnidade: number, nomeUnidade: string }[]>([])
-  // tecnicos can be array of string or array of objects
-  const [tecnicos, setTecnicos] = useState<any[]>([])
+  // Only internos: filter tecnicos with areaTec containing 'interno' (case-insensitive)
+  const tecnicosInternos = tecnicos.filter(t => {
+    if (typeof t.areaTec === 'string') {
+      return t.areaTec.toLowerCase().includes('interno');
+    }
+    return false;
+  });
+  const [relatedTickets, setRelatedTickets] = useState<any[]>([]);
+  const [relatedLoading, setRelatedLoading] = useState(false);
+  const [relatedError, setRelatedError] = useState<string | null>(null);
+  const [ticketHistory, setTicketHistory] = useState<any[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+
+  // --- Data Fetching ---
+  useEffect(() => {
+    if (data) {
+      setTicketDetails(data);
+      return;
+    }
+    if (!ticketDetails?.id && !data?.id) return;
+    setTicketLoading(true);
+    setTicketError(null);
+    api.get(`/equipamentos/${data?.id || ticketDetails?.id}`)
+      .then(res => setTicketDetails(res.data))
+      .catch(() => setTicketError('Erro ao buscar detalhes do registro'))
+      .finally(() => setTicketLoading(false));
+  }, [data]);
 
   useEffect(() => {
-    // Fetch unidades
     api.get('/unidades').then(res => {
       if (Array.isArray(res.data)) {
-        setUnidades(res.data.map((u: any) => ({ idUnidade: u.idUnidade, nomeUnidade: u.nomeUnidade })))
+        setUnidades(res.data.map((u: any) => ({ idUnidade: u.idUnidade, nomeUnidade: u.nomeUnidade })));
       }
-    })
-    // Fetch tecnicos
+    });
     api.get('/tecnicos').then(res => {
       if (Array.isArray(res.data)) {
-        // If backend returns array of objects with idTec and nomeTec, use as is
         if (res.data.length > 0 && typeof res.data[0] === 'object' && 'idTec' in res.data[0]) {
-          setTecnicos(res.data)
+          setTecnicos(res.data);
         } else {
-          setTecnicos(res.data.map((t: any) => ({ nomeTec: t })))
+          setTecnicos(res.data.map((t: any) => ({ nomeTec: t })));
         }
       }
-    })
-  }, [])
-
-  // Real related tickets and history
-  const [relatedTickets, setRelatedTickets] = useState<any[]>([])
-  const [relatedLoading, setRelatedLoading] = useState(false)
-  const [relatedError, setRelatedError] = useState<string | null>(null)
-  const [ticketHistory, setTicketHistory] = useState<any[]>([])
-  const [historyLoading, setHistoryLoading] = useState(false)
-  const [historyError, setHistoryError] = useState<string | null>(null)
+    });
+  }, []);
 
   useEffect(() => {
     if (!ticketDetails?.id) return;
-    setRelatedLoading(true)
-    setRelatedError(null)
+    setRelatedLoading(true);
+    setRelatedError(null);
     api.get(`/equipamentos/${ticketDetails.id}/relacionados`)
       .then(res => setRelatedTickets(res.data || []))
       .catch(() => setRelatedError('Erro ao buscar chamados relacionados'))
-      .finally(() => setRelatedLoading(false))
-  }, [ticketDetails.id])
+      .finally(() => setRelatedLoading(false));
+  }, [ticketDetails.id]);
 
   useEffect(() => {
     if (!ticketDetails?.id) return;
-    setHistoryLoading(true)
-    setHistoryError(null)
+    setHistoryLoading(true);
+    setHistoryError(null);
     api.get(`/equipamentos/${ticketDetails.id}/historico`)
       .then(res => setTicketHistory(res.data || []))
       .catch(() => setHistoryError('Erro ao buscar histórico'))
-      .finally(() => setHistoryLoading(false))
-  }, [ticketDetails.id])
+      .finally(() => setHistoryLoading(false));
+  }, [ticketDetails.id]);
 
+
+  // --- UI Helpers ---
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "ENTRADA":
-        return <Clock className="h-4 w-4 text-red-400" />
-      case "SAÍDA":
-        return <CheckCircle className="h-4 w-4 text-green-400" />
+        return <Clock className="h-4 w-4 text-amber-500" />;
+      case "REPARO":
+        return <Wrench className="h-4 w-4 text-teal-200" />;
       case "PRONTO":
-        return <AlertTriangle className="h-4 w-4 text-blue-400" />
+        return <AlertTriangle className="h-4 w-4 text-blue-500" />;
+      case "DESCARTE":
+        return <OctagonX className="h-4 w-4 text-red-500" />;
+      case "SAÍDA":
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       default:
-        return <Clock className="h-4 w-4 text-gray-400" />
+        return <Clock className="h-4 w-4 text-gray-400" />;
     }
-  }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case "ENTRADA":
-        return "bg-red-500/20 text-red-300 border-red-500/30"
-      case "SAÍDA":
-        return "bg-green-500/20 text-green-300 border-green-500/30"
+        return "bg-amber-500/20 text-amber-300 border-amber-500/30";
+      case "REPARO":
+        return "bg-teal-200/20 text-teal-300 border-teal-200/30";
       case "PRONTO":
-        return "bg-blue-500/20 text-blue-300 border-blue-500/30"
+        return "bg-blue-500/20 text-blue-300 border-blue-500/30";
+      case "DESCARTE":
+        return "bg-red-500/20 text-red-300 border-red-500/30";
+      case "SAÍDA":
+        return "bg-green-500/20 text-green-300 border-green-500/30";
       default:
-        return "bg-gray-500/20 text-gray-300 border-gray-500/30"
+        return "bg-gray-500/20 text-gray-300 border-gray-500/30";
     }
-  }
+  };
+
+  //inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 hover:bg-primary/80 bg-blue-500/20 text-blue-300 border-blue-500/30 font-bold font-arial
 
   // --- API Actions ---
   const handleMarkAsReady = async () => {
     try {
-      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "PRONTO" })
-      toast.success(`Registro ${ticketDetails.tombamento} marcado como PRONTO`, {
-        duration: 3000,
-        position: "top-right",
-      })
-      setMarkReadyDialogOpen(false)
-      // Optionally refresh data here
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "PRONTO" });
+      toast.success(`Registro ${ticketDetails.tombamento} marcado como PRONTO`, { duration: 3000, position: "top-right" });
+      setMarkReadyDialogOpen(false);
     } catch (err) {
-      toast.error("Erro ao marcar como PRONTO")
+      toast.error("Erro ao marcar como PRONTO");
     }
-  }
+  };
 
   const handleMarkAsDelivered = async () => {
     try {
-      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "SAÍDA" })
-      toast.success(`Registro ${ticketDetails.tombamento} marcado como SAÍDA`, {
-        duration: 3000,
-        position: "top-right",
-      })
-      setMarkDeliveredDialogOpen(false)
-      // Optionally refresh data here
+      await api.patch(`/equipamentos/${ticketDetails.id}/status`, { status: "SAÍDA" });
+      toast.success(`Registro ${ticketDetails.tombamento} marcado como SAÍDA`, { duration: 3000, position: "top-right" });
+      setMarkDeliveredDialogOpen(false);
     } catch (err) {
-      toast.error("Erro ao marcar como SAÍDA")
+      toast.error("Erro ao marcar como SAÍDA");
     }
-  }
+  };
 
   const handlePrintLabel = async () => {
     try {
-      // Download or print the label (ZPL)
-      const res = await api.get(`/equipamentos/${ticketDetails.id}/etiqueta`, { responseType: 'blob' })
-      // Optionally trigger print or download
-      toast.success("Etiqueta gerada com sucesso", { duration: 3000, position: "top-right" })
-      setPrintDialogOpen(false)
+      await api.get(`/equipamentos/${ticketDetails.id}/etiqueta`, { responseType: 'blob' });
+      toast.success("Etiqueta gerada com sucesso", { duration: 3000, position: "top-right" });
+      setPrintDialogOpen(false);
     } catch (err) {
-      toast.error("Erro ao gerar etiqueta")
+      toast.error("Erro ao gerar etiqueta");
     }
-  }
+  };
 
   const handleDeleteRecord = async () => {
     try {
-      await api.delete(`/equipamentos/${ticketDetails.id}`)
-      toast.success(`Registro ${ticketDetails.tombamento} foi excluído com sucesso`, {
-        duration: 3000,
-        position: "top-right",
-      })
-      setDeleteDialogOpen(false)
-      onNavigate("home")
+      await api.delete(`/equipamentos/${ticketDetails.id}`);
+      toast.success(`Registro ${ticketDetails.tombamento} foi excluído com sucesso`, { duration: 3000, position: "top-right" });
+      setDeleteDialogOpen(false);
+      onNavigate("home");
     } catch (err) {
-      toast.error("Erro ao excluir registro")
+      toast.error("Erro ao excluir registro");
     }
-  }
+  };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     try {
       await api.put(`/equipamentos/${ticketDetails.id}`, {
         idTomb: editFormData.tombamento,
@@ -247,26 +330,23 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
         descDefeito: editFormData.descricao,
         unidade: editFormData.unidade,
         tecnico: editFormData.tecnico,
-      })
-      toast.success(`Registro ${ticketDetails.tombamento} foi atualizado com sucesso`, {
-        duration: 3000,
-        position: "top-right",
-      })
-      setEditDialogOpen(false)
-      // Optionally refresh data here
+      });
+      toast.success(`Registro ${ticketDetails.tombamento} foi atualizado com sucesso`, { duration: 3000, position: "top-right" });
+      setEditDialogOpen(false);
     } catch (err) {
-      toast.error("Erro ao atualizar registro")
+      toast.error("Erro ao atualizar registro");
     }
-  }
+  };
 
   const isEditFormValid =
     editFormData.tombamento &&
     editFormData.ambiente &&
     editFormData.unidade &&
     editFormData.descricao &&
-    editFormData.tecnico
+    editFormData.tecnico;
 
-  // Atualiza os dados do formulário de edição ao abrir o popup
+
+  // --- Edit Dialog: keep form in sync with ticket details ---
   useEffect(() => {
     if (editDialogOpen && ticketDetails) {
       setEditFormData({
@@ -276,11 +356,10 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
         unidade: ticketDetails.unidade,
         descricao: ticketDetails.descricao,
         tecnico: ticketDetails.tecnico ? String(ticketDetails.tecnico) : '',
-      })
+      });
     }
-  }, [editDialogOpen, ticketDetails])
+  }, [editDialogOpen, ticketDetails]);
 
-  // Atualiza os dados do formulário de edição ao abrir o popup, garantindo que os selects estejam pré-selecionados
   useEffect(() => {
     if (editDialogOpen && unidades.length && tecnicos.length && ticketDetails) {
       setEditFormData(prev => ({
@@ -294,27 +373,27 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
         tecnico: tecnicos.some(t => String(t.idTec) === String(ticketDetails.tecnico))
           ? String(ticketDetails.tecnico)
           : String(tecnicos[0]?.idTec || ''),
-      }))
+      }));
     }
-  }, [editDialogOpen, ticketDetails, unidades, tecnicos])
+  }, [editDialogOpen, ticketDetails, unidades, tecnicos]);
 
+
+  // --- Loading/Error States ---
   if (ticketLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#191818] text-white">
         <span className="text-2xl font-arial">Carregando detalhes do registro...</span>
       </div>
-    )
+    );
   }
   if (ticketError) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#191818] text-white">
         <span className="text-2xl text-red-400 font-arial">{ticketError}</span>
       </div>
-    )
+    );
   }
-  if (!ticketDetails) {
-    return null
-  }
+  if (!ticketDetails) return null;
 
   return (
     <div className="min-h-screen bg-[#191818] text-white">
@@ -513,128 +592,159 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                   </div>
                 </div>
 
-                {/* Action Buttons */}
+                {/* Action Buttons (Workflow) */}
                 <div className="flex justify-center gap-4 pt-4 border-t border-[#E9A870]/20">
-                  {/* MARCAR COMO PRONTO */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setMarkReadyDialogOpen(true)}
-                      className="w-16 h-16 flex items-center justify-center rounded-xl bg-[#1C1815] hover:bg-[#2A231E] transition-all duration-200 hover:scale-105 cursor-pointer"
-                      title="MARCAR COMO PRONTO"
-                    >
-                      <div className="w-14 h-14 rounded-xl flex items-center justify-center border-2 border-[#E9A870]">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
-                            stroke="#E9A870"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <path
-                            d="M9 12L11 14L15 10"
-                            stroke="#E9A870"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
-                    </button>
-                    <AlertDialog open={markReadyDialogOpen} onOpenChange={setMarkReadyDialogOpen}>
-                      <AlertDialogContent className="bg-[#1C1815] border-[#E9A870] text-white">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-[#E9A870] text-xl font-abel">
-                            Marcar como Pronto
-                          </AlertDialogTitle>
-                          <AlertDialogDescription className="text-gray-300 font-arial">
-                            Tem certeza que deseja marcar o registro{" "}
-                            <span className="font-bold text-white">{ticketDetails.tombamento}</span> como PRONTO?
-                            <br />
-                            <span className="text-blue-400 text-sm">
-                              O status será alterado para "PRONTO" e ficará disponível para entrega.
-                            </span>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500">
-                            Cancelar
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={handleMarkAsReady}
-                            className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Marcar como Pronto
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                  {/* INICIAR REPARO (if ENTRADA) */}
+                  {ticketDetails.status === "ENTRADA" && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setRepairDialogOpen(true)}
+                        className="w-16 h-16 flex items-center justify-center rounded-xl bg-[#1C1815] hover:bg-[#2A231E] transition-all duration-200 hover:scale-105 cursor-pointer"
+                        title="INICIAR REPARO"
+                      >
+                        <div className="w-14 h-14 rounded-xl flex items-center justify-center border-2 border-[#E9A870]">
+                          <Wrench className="h-7 w-7 text-[#E9A870]" />
+                        </div>
+                      </button>
+                      {/* Repair Dialog: Select technician */}
+                      <Dialog open={repairDialogOpen} onOpenChange={setRepairDialogOpen}>
+                        <DialogContent className="bg-gradient-to-b from-[#1C1815] to-[#0C0C0C] border-2 border-[#E9A870] text-white max-w-md shadow-2xl backdrop-blur-sm">
+                          <DialogHeader>
+                            <DialogTitle className="text-[#E9A870] text-xl font-abel">Iniciar Reparo</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-sm font-medium text-[#E9A870]">Selecione o Técnico Responsável</label>
+                              <Select value={selectedTecnico} onValueChange={setSelectedTecnico}>
+                                <SelectTrigger className="bg-[#121212] border-[#E9A870]/40 text-white mt-2">
+                                  <SelectValue placeholder="Selecione o técnico" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
+                                  {tecnicosInternos.length === 0 ? (
+                                    <div className="p-2 text-gray-400">Nenhum técnico interno disponível</div>
+                                  ) : (
+                                    tecnicosInternos.map((tecnico) => (
+                                      <SelectItem
+                                        key={tecnico.idTec}
+                                        value={String(tecnico.idTec)}
+                                        className="focus:bg-[#E9A870]/20 hover:bg-[#E9A870]/10 transition-colors font-arial cursor-pointer"
+                                      >
+                                        {tecnico.nomeTec}
+                                      </SelectItem>
+                                    ))
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="flex justify-end gap-3">
+                              <Button variant="outline" onClick={() => setRepairDialogOpen(false)} className="bg-gradient-to-r from-[#2A231E] to-[#1C1815] border-[#E9A870]/40 text-[#E0CAA5]">Cancelar</Button>
+                              <Button onClick={handleStartRepair} disabled={!selectedTecnico || loadingWorkflow} className="bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200 hover:scale-105">
+                                Iniciar Reparo
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
 
-                  {/* MARCAR COMO SAÍDA */}
-                  <div className="relative">
-                    <button
-                      onClick={() => setMarkDeliveredDialogOpen(true)}
-                      className="w-16 h-16 flex items-center justify-center rounded-xl bg-[#1C1815] hover:bg-[#2A231E] transition-all duration-200 hover:scale-105 cursor-pointer"
-                      title="MARCAR COMO SAÍDA"
-                    >
-                      <div className="w-14 h-14 rounded-xl flex items-center justify-center border-2 border-[#E9A870]">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                          <path
-                            d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9"
-                            stroke="#E9A870"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <path
-                            d="M16 17L21 12L16 7"
-                            stroke="#E9A870"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                          <path
-                            d="M21 12H9"
-                            stroke="#E9A870"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </div>
-                    </button>
-                    <AlertDialog open={markDeliveredDialogOpen} onOpenChange={setMarkDeliveredDialogOpen}>
-                      <AlertDialogContent className="bg-[#1C1815] border-[#E9A870] text-white">
-                        <AlertDialogHeader>
-                          <AlertDialogTitle className="text-[#E9A870] text-xl font-abel">
-                            Marcar como Saída
-                          </AlertDialogTitle>
-                          <AlertDialogDescription className="text-gray-300 font-arial">
-                            Tem certeza que deseja marcar o registro{" "}
-                            <span className="font-bold text-white">{ticketDetails.tombamento}</span> como SAÍDA?
-                            <br />
-                            <span className="text-green-400 text-sm">
-                              O equipamento será marcado como entregue e o chamado será finalizado.
-                            </span>
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500">
-                            Cancelar
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={handleMarkAsDelivered}
-                            className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
-                          >
-                            <CheckCircle className="h-4 w-4 mr-2" />
-                            Marcar como Saída
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                  {/* REPARO EM ANDAMENTO: Show overlay for concluir/descartar if status is REPARO */}
+                  {ticketDetails.status === "REPARO" && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setRepairDialogOpen(true)}
+                        className="w-16 h-16 flex items-center justify-center rounded-xl bg-[#1C1815] hover:bg-[#2A231E] transition-all duration-200 hover:scale-105 cursor-pointer"
+                        title="AÇÕES DE REPARO"
+                      >
+                        <div className="w-14 h-14 rounded-xl flex items-center justify-center border-2 border-[#E9A870]">
+                          <Wrench className="h-7 w-7 text-[#E9A870]" />
+                        </div>
+                      </button>
+                      {/* Repair Actions Dialog: Conclude or Discard */}
+                      <Dialog open={repairDialogOpen} onOpenChange={setRepairDialogOpen}>
+                        <DialogContent className="bg-gradient-to-b from-[#1C1815] to-[#0C0C0C] border-2 border-[#E9A870] text-white max-w-md shadow-2xl backdrop-blur-sm">
+                          <DialogHeader>
+                            <DialogTitle className="text-[#E9A870] text-xl font-abel">Ações de Reparo</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-sm font-medium text-[#E9A870]">Solução/Notas do Reparo</label>
+                              <Textarea value={solution} onChange={e => setSolution(e.target.value)} placeholder="Descreva a solução ou observações do reparo..." className="bg-[#121212] border-[#E9A870]/40 text-white mt-2" />
+                            </div>
+                            <div className="flex justify-end gap-3">
+                              <Button onClick={handleConcludeRepair} disabled={!solution || loadingWorkflow} className="bg-gradient-to-r from-blue-600 to-blue-700 text-white font-bold flex items-center gap-2">
+                                <CircleCheckBig className="h-5 w-5" /> Concluir Reparo
+                              </Button>
+                              <Button variant="destructive" onClick={() => setDiscardDialogOpen(true)} className="bg-gradient-to-r from-red-600 to-red-700 text-white font-bold flex items-center gap-2">
+                                <OctagonX className="h-5 w-5" /> Descartar Equipamento
+                              </Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                      {/* Discard Dialog */}
+                      <Dialog open={discardDialogOpen} onOpenChange={setDiscardDialogOpen}>
+                        <DialogContent className="bg-gradient-to-b from-[#1C1815] to-[#0C0C0C] border-2 border-[#E9A870] text-white max-w-md shadow-2xl backdrop-blur-sm">
+                          <DialogHeader>
+                            <DialogTitle className="text-[#E9A870] text-xl font-abel">Descartar Equipamento</DialogTitle>
+                          </DialogHeader>
+                          <div className="space-y-4">
+                            <div>
+                              <label className="text-sm font-medium text-[#E9A870]">Motivo do Descarte</label>
+                              <Textarea value={discardReason} onChange={e => setDiscardReason(e.target.value)} placeholder="Descreva o motivo do descarte..." className="bg-[#121212] border-[#E9A870]/40 text-white mt-2" />
+                            </div>
+                            <div className="flex justify-end gap-3">
+                              <Button variant="outline" onClick={() => setDiscardDialogOpen(false)} className="bg-gradient-to-r from-[#2A231E] to-[#1C1815] border-[#E9A870]/40 text-[#E0CAA5]">Cancelar</Button>
+                              <Button onClick={handleDiscard} disabled={!discardReason || loadingWorkflow} className="bg-gradient-to-r from-red-600 to-red-700 text-white font-bold">Descartar</Button>
+                            </div>
+                          </div>
+                        </DialogContent>
+                      </Dialog>
+                    </div>
+                  )}
+
+                  {/* MARCAR COMO PRONTO (if status is not ENTRADA/REPARO/PRONTO/SAÍDA/DESCARTE) */}
+                  {ticketDetails.status === "PRONTO" && (
+                    <div className="relative">
+                      <button
+                        onClick={() => setMarkDeliveredDialogOpen(true)}
+                        className="w-16 h-16 flex items-center justify-center rounded-xl bg-[#1C1815] hover:bg-[#2A231E] transition-all duration-200 hover:scale-105 cursor-pointer"
+                        title="MARCAR COMO SAÍDA"
+                      >
+                        <div className="w-14 h-14 rounded-xl flex items-center justify-center border-2 border-[#E9A870]">
+                          <CheckCircle className="h-6 w-6 text-[#E9A870]" />
+                        </div>
+                      </button>
+                      <AlertDialog open={markDeliveredDialogOpen} onOpenChange={setMarkDeliveredDialogOpen}>
+                        <AlertDialogContent className="bg-[#1C1815] border-[#E9A870] text-white">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-[#E9A870] text-xl font-abel">
+                              Marcar como Saída
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-gray-300 font-arial">
+                              Tem certeza que deseja marcar o registro <span className="font-bold text-white">{ticketDetails.tombamento}</span> como SAÍDA?
+                              <br />
+                              <span className="text-green-400 text-sm">
+                                O equipamento será marcado como entregue e o chamado será finalizado.
+                              </span>
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel className="bg-gray-600 hover:bg-gray-700 text-white border-gray-500">
+                              Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={handleMarkAsDeliveredWorkflow}
+                              className="bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white"
+                            >
+                              <CheckCircle className="h-4 w-4 mr-2" />
+                              Marcar como Saída
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  )}
 
                   {/* IMPRIMIR ETIQUETA */}
                   <div className="relative">

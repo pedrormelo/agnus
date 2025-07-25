@@ -21,6 +21,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Check,
+  Wrench,
+  OctagonX,
 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -268,16 +270,24 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
     switch (status) {
       case "ENTRADA":
-        ledColor = "bg-red-500"
-        icon = <Clock className="h-3 w-3 text-red-400" />
+        ledColor = "bg-amber-500"
+        icon = <Clock className="h-3 w-3 text-amber-500" />
         break
-      case "SAÍDA":
-        ledColor = "bg-green-500"
-        icon = <CheckCircle className="h-3 w-3 text-green-400" />
+      case "REPARO":
+        ledColor = "bg-teal-200"
+        icon = <Wrench className="h-3 w-3 text-teal-200" />
         break
       case "PRONTO":
         ledColor = "bg-blue-600"
-        icon = <AlertTriangle className="h-3 w-3 text-blue-400" />
+        icon = <AlertTriangle className="h-3 w-3 text-blue-600" />
+        break
+      case "DESCARTE":
+        ledColor = "bg-red-500"
+        icon = <OctagonX className="h-3 w-3 text-red-500" />
+        break
+      case "SAÍDA":
+        ledColor = "bg-green-500"
+        icon = <CheckCircle className="h-3 w-3 text-green-500" />
         break
       default:
         ledColor = "bg-gray-500"
