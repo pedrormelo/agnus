@@ -2,7 +2,7 @@
 
 import React, { useState, useRef, useEffect, useCallback, useMemo } from "react"
 import debounce from "lodash.debounce"
-import api from "@/lib/api"
+import { getEquipamentos, getUnidades, deleteEquipamento } from "@/lib/api"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -140,7 +140,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   // Fetch equipamentos from backend
   useEffect(() => {
     setIsLoading(true)
-    api.get("/equipamentos")
+    getEquipamentos()
       .then((res: { data: any[] }) => {
         const mapped = res.data.map((item) => ({
           id: item.idEquip,
@@ -166,12 +166,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
   // Fetch unidades on mount
   useEffect(() => {
-    api.get("/unidades")
+    getUnidades()
       .then((res: { data: Unidade[] }) => setUnidades(res.data))
       .catch(() => toast.error("Erro ao carregar unidades"))
   }, [])
 
-  // Filter computers based on search, status, and unidade
+  // Filter computers based on search, status, and unidade, and sort newest first
   useEffect(() => {
     if (debouncedSearch || statusFilter || unidadeFilter || activeTab !== "TODOS") {
       setIsLoading(true)
@@ -207,12 +207,28 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           filtered = filtered.filter((computer) => computer.status === "SAÍDA")
         }
 
+        // Sort by newest first (assuming higher id means newer)
+        filtered = [...filtered].sort((a, b) => {
+          // Prefer dataEntrada if available, else fallback to id
+          if (a.dataEntrada && b.dataEntrada) {
+            return new Date(b.dataEntrada).getTime() - new Date(a.dataEntrada).getTime();
+          }
+          return b.id - a.id;
+        });
+
         setFilteredComputers(filtered)
         setIsLoading(false)
       }, 0)
       return () => clearTimeout(timer)
     } else {
-      setFilteredComputers(computers)
+      // Sort all by newest first
+      const sorted = [...computers].sort((a, b) => {
+        if (a.dataEntrada && b.dataEntrada) {
+          return new Date(b.dataEntrada).getTime() - new Date(a.dataEntrada).getTime();
+        }
+        return b.id - a.id;
+      });
+      setFilteredComputers(sorted)
       setIsLoading(false)
     }
   }, [debouncedSearch, statusFilter, unidadeFilter, activeTab, computers])
@@ -314,7 +330,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   const confirmDelete = async () => {
     if (computerToDelete) {
       try {
-        await api.delete(`/equipamentos/${computerToDelete.id}`)
+        await deleteEquipamento(computerToDelete.id)
         toast.success(`Registro ${computerToDelete.tombamento} foi excluído com sucesso`, {
           duration: 3000,
           position: "top-right",
@@ -645,14 +661,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           </div>
 
           {/* Table - Full Width with Edge-to-Edge Borders */}
-          <div className="flex-1 px-6 flex-1 pr-12 pl-12 pb-12">
+          <div className="px-6 flex-1 pr-12 pl-12 pb-12">
             <div className="bg-[#1C1815] border-[#E9A870] border-2 rounded-xl overflow-hidden shadow-2xl backdrop-blur-sm hover:shadow-[#E9A870]/10 transition-all duration-300 h-full flex flex-col">
               <div className="bg-gradient-to-r from-[#E9A870] to-[#A8784F] p-0 flex-shrink-0">
                 <div className="grid grid-cols-5 gap-6 px-6 py-4 text-black font-bold text-lg font-arial">
                   <div>TOMBAMENTO</div>
                   <div>STATUS</div>
                   <div>UNIDADE</div>
-                  <div className="text-center">ID</div>
+                  <div className="text-center">TIPO</div>
                   <div>AÇÕES</div>
                 </div>
               </div>
@@ -664,12 +680,16 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                     const { ledColor, icon, pulseClass, baseClasses } = getStatusIndicator(
                       computer.status
                     )
+                    // Find the full unidade object for this row
+                    const unidadeObj = unidades.find(u => u.idUnidade === computer.unidade)
+                    // Pass the full equipment object, including unidadeObj, to detalhes
+                    const fullComputer = { ...computer, unidadeObj }
                     return (
                       <div
                         key={computer.id}
                         className="grid grid-cols-5 gap-6 px-6 py-4 border-b border-[#E9A870]/30 items-center hover:bg-gradient-to-r hover:from-gray-800/20 hover:to-gray-700/20 transition-all duration-300 group hover:scale-[1.01] hover:shadow-lg cursor-pointer"
                         style={{ animationDelay: `${index * 100}ms` }}
-                        onClick={() => handleRowClick(computer)}
+                        onClick={() => handleRowClick(fullComputer)}
                       >
                         <div className="text-gray-300 group-hover:text-white transition-colors font-bold text-base font-abel">
                           {computer.tombamento}
@@ -683,14 +703,17 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         </div>
                         <div className="text-gray-300 group-hover:text-white transition-colors font-bold text-base font-abel">
                           <button
-                            onClick={(e) => handleTecnicoClick(computer.tecnico?.toString() ?? "", e)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUnidadeFilter(unidadeObj ? unidadeObj.idUnidade.toString() : computer.unidade?.toString() ?? "");
+                            }}
                             className="hover:text-[#E9A870] transition-colors"
                           >
-                            {unidades.find(u => u.idUnidade === computer.unidade)?.nomeUnidade ?? computer.unidade}
+                            {unidadeObj ? unidadeObj.nomeUnidade : computer.unidade}
                           </button>
                         </div>
                         <div className="text-gray-300 group-hover:text-white transition-colors text-center text-base font-abel">
-                          {computer.id}
+                          {computer.tipo || "-"}
                         </div>
                         <div className="flex gap-3">
                           <Button
@@ -781,12 +804,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
             <div className="space-y-4">
               {computers.filter((c) => c.status === "PRONTO").map((item, index) => {
                 const unidadeObj = unidades.find(u => u.idUnidade === item.unidade)
+                // Pass the full equipment object, including unidadeObj, to detalhes
+                const fullItem = { ...item, unidadeObj }
                 return (
                   <div
                     key={item.id}
                     className="flex items-center justify-between py-3 px-3 rounded-lg hover:bg-gradient-to-r hover:from-gray-800/50 hover:to-gray-700/50 transition-all duration-300 hover:shadow-md group border border-transparent hover:border-[#E9A870]/20 hover:scale-105 hover:-translate-y-1 cursor-pointer"
                     style={{ animationDelay: `${index * 150}ms` }}
-                    onClick={() => onNavigate("detalhes", { id: item.id, tombamento: item.tombamento })}
+                    onClick={() => onNavigate("detalhes", fullItem)}
                   >
                     <div className="flex items-center gap-4 flex-1">
                       <div className="flex flex-col items-center gap-1">

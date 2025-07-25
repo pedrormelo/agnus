@@ -23,7 +23,7 @@ import { Menu, Plus, Filter, Edit, Trash2, Search, X, Phone, Check, Home, Chevro
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { cn } from "@/lib/utils"
 import { toast, Toaster } from "sonner"
-import api from "@/lib/api"
+import { getTecnicos, createTecnico, updateTecnico, deleteTecnico } from "@/lib/api"
 
 interface TecnicosProps {
   onNavigate: (page: string, data?: any) => void
@@ -63,7 +63,7 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
 
   // Fetch technicians from backend
   React.useEffect(() => {
-    api.get("/tecnicos")
+    getTecnicos()
       .then((res: { data: Tecnico[] }) => {
         setTecnicos(res.data)
         setFilteredTecnicos(res.data)
@@ -116,7 +116,7 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
       habTec: formData.especialidades,
     }
     try {
-      const res = await api.post("/tecnicos", payload)
+      const res = await createTecnico(payload)
       const newTec = res.data
       setTecnicos((prev) => [...prev, newTec])
       setFilteredTecnicos((prev) => [...prev, newTec])
@@ -158,7 +158,7 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
       habTec: formData.especialidades,
     }
     try {
-      const res = await api.put(`/tecnicos/${selectedTecnico.idTec}`, payload)
+      const res = await updateTecnico(selectedTecnico.idTec, payload)
       const updatedTec = res.data
       setTecnicos((prev) => prev.map((t) => (t.idTec === updatedTec.idTec ? updatedTec : t)))
       setFilteredTecnicos((prev) => prev.map((t) => (t.idTec === updatedTec.idTec ? updatedTec : t)))
@@ -181,7 +181,7 @@ export default function Tecnicos({ onNavigate, data }: TecnicosProps) {
   const confirmDelete = async () => {
     if (tecnicoToDelete) {
       try {
-        await api.delete(`/tecnicos/${tecnicoToDelete.idTec}`)
+        await deleteTecnico(tecnicoToDelete.idTec)
         setTecnicos((prev) => prev.filter((t) => t.idTec !== tecnicoToDelete.idTec))
         setFilteredTecnicos((prev) => prev.filter((t) => t.idTec !== tecnicoToDelete.idTec))
         toast.success(`Técnico ${tecnicoToDelete.nomeTec} foi excluído com sucesso`, {

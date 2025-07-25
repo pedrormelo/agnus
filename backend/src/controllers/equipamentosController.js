@@ -1,3 +1,43 @@
+// controllers/equipamentosController.js
+const db = require('../config/db');
+const { exec } = require('child_process');
+const Equipamento = require('../models/Equipamento');
+
+// Nova rota: Mover para REPARO
+exports.moverParaReparo = async (req, res) => {
+    const id = req.params.id;
+    const { idTecnico, dataReparo } = req.body;
+    try {
+        await Equipamento.moveToReparo(id, { idTecnico, dataReparo });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+};
+
+// Nova rota: Completar como PRONTO
+exports.completarPronto = async (req, res) => {
+    const id = req.params.id;
+    const { solucao } = req.body;
+    try {
+        await Equipamento.completePronto(id, { solucao });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+};
+
+// Nova rota: Marcar como DESCARTE
+exports.marcarDescarte = async (req, res) => {
+    const id = req.params.id;
+    const { motivoDescarte } = req.body;
+    try {
+        await Equipamento.markDescarte(id, { motivoDescarte });
+        res.json({ success: true });
+    } catch (err) {
+        res.status(400).json({ error: err.message });
+    }
+};
 // Retorna chamados relacionados para um equipamento
 exports.getRelacionados = async (req, res) => {
     const id = req.params.id;
@@ -19,10 +59,6 @@ exports.getHistorico = async (req, res) => {
         res.status(500).json({ error: 'Erro ao buscar histórico do registro' });
     }
 };
-// controllers/equipamentosController.js
-const db = require('../config/db');
-const { exec } = require('child_process');
-const Equipamento = require('../models/Equipamento');
 
 exports.listarEquipamentos = async (req, res) => {
     try {
@@ -82,14 +118,11 @@ eJxjYBiugP3/AfYHQFr+/wH5D0Da/v8B+x8Quv4PkK5Hp/kP/PsHpOv4D/ypQ6MLIPIgZSD9KLQ8lGaH
         // Salva o ZPL em um arquivo temporário
         const fs = require('fs');
         const path = require('path');
-        const zplPath = path.join(__dirname, '..', 'tmp', `etiqueta_${codigoEtiqueta}.zpl`);
+        // Caminho da pasta compartilhada na máquina de impressão
+        const zplSharePath = process.env.ZPL_SHARE_PATH || "\\\\TI-02\\zpl-jobs"; // Use env or fallback
+        const zplPath = path.join(zplSharePath, `etiqueta_${codigoEtiqueta}.zpl`);
         fs.writeFileSync(zplPath, zpl);
-
-        // Comando para imprimir (Windows)
-        exec(`type "${zplPath}" > \\\\localhost\\ZDesignerGC420d`, (error) => {
-            if (error) console.error('Erro ao imprimir etiqueta:', error);
-        });
-
+        // Não imprime aqui! O agente local fará a impressão.
         res.status(201).json({ idEquip, codigoEtiqueta });
     } catch (err) {
         console.error('Erro ao criar equipamento:', err);
@@ -186,22 +219,12 @@ eJxjYBiugP3/AfYHQFr+/wH5D0Da/v8B+x8Quv4PkK5Hp/kP/PsHpOv4D/ypQ6MLIPIgZSD9KLQ8lGaH
         // Salva o ZPL em um arquivo temporário
         const fs = require('fs');
         const path = require('path');
-        const zplPath = path.join(__dirname, '..', 'tmp', `etiqueta_${eq.codigoEtiqueta}.zpl`);
+        // Caminho da pasta compartilhada na máquina de impressão
+        const zplSharePath = process.env.ZPL_SHARE_PATH || "\\\\TI-02\\zpl-jobs"; // Use env or fallback
+        const zplPath = path.join(zplSharePath, `etiqueta_${eq.codigoEtiqueta}.zpl`);
         fs.writeFileSync(zplPath, zpl);
-
-        // Caminho da impressora pode ser configurado por variável de ambiente ou padrão
-        const printerPath = process.env.ZPL_PRINTER_PATH || "\\\\localhost\\ZDesignerGC420d";
-        const printCommand = `type "${zplPath}" > ${printerPath}`;
-        console.log('Comando de impressão:', printCommand);
-
-        // Comando para imprimir (Windows)
-        exec(printCommand, (error) => {
-            if (error) {
-                console.error('Erro ao imprimir etiqueta:', error);
-                return res.status(500).json({ error: 'Erro ao imprimir etiqueta', details: error.message, command: printCommand });
-            }
-            res.status(201).json({ idEquip: eq.idEquip, codigoEtiqueta: eq.codigoEtiqueta });
-        });
+        // Não imprime aqui! O agente local fará a impressão.
+        res.status(201).json({ idEquip: eq.idEquip, codigoEtiqueta: eq.codigoEtiqueta });
     } catch (err) {
         console.error('Erro ao criar equipamento:', err);
         res.status(500).json({ error: 'Erro ao criar equipamento' });

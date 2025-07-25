@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -34,7 +34,7 @@ import {
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast, Toaster } from "sonner"
-import api from "@/lib/api"
+import { getEquipamentos, getTecnicos, getUnidades } from "@/lib/api"
 
 interface DashboardPageProps {
   onNavigate: (page: string, data?: any) => void
@@ -106,17 +106,21 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
   useEffect(() => {
     if (autoRefresh) {
       const refreshTimer = setInterval(() => {
-        setLastRefresh(new Date())
-        console.log("Refreshing dashboard data...")
-      }, 30000)
-      return () => clearInterval(refreshTimer)
+        setLastRefresh(new Date());
+        // Fetch all dashboard data again
+        getEquipamentos().then((res) => setEquipamentos(res.data)).catch(() => toast.error("Erro ao carregar equipamentos"));
+        getTecnicos().then((res) => setTecnicos(res.data)).catch(() => toast.error("Erro ao carregar técnicos"));
+        getUnidades().then((res) => setUnidades(res.data)).catch(() => toast.error("Erro ao carregar unidades"));
+        console.log("Refreshing dashboard data...");
+      }, 30000);
+      return () => clearInterval(refreshTimer);
     }
-  }, [autoRefresh])
+  }, [autoRefresh]);
 
   useEffect(() => {
-    api.get("/equipamentos").then((res) => setEquipamentos(res.data)).catch(() => toast.error("Erro ao carregar equipamentos"))
-    api.get("/tecnicos").then((res) => setTecnicos(res.data)).catch(() => toast.error("Erro ao carregar técnicos"))
-    api.get("/unidades").then((res) => setUnidades(res.data)).catch(() => toast.error("Erro ao carregar unidades"))
+    getEquipamentos().then((res) => setEquipamentos(res.data)).catch(() => toast.error("Erro ao carregar equipamentos"))
+    getTecnicos().then((res) => setTecnicos(res.data)).catch(() => toast.error("Erro ao carregar técnicos"))
+    getUnidades().then((res) => setUnidades(res.data)).catch(() => toast.error("Erro ao carregar unidades"))
   }, [])
 
   // Real stats from backend data
@@ -206,6 +210,16 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
     }
   }, [computedTecnicoStats.length, totalPages])
 
+  // Auto-scroll horizontal técnicos carousel
+  useEffect(() => {
+    if (totalPages > 1) {
+      const scrollTimer = setInterval(() => {
+        setCurrentPage((prev) => (prev < totalPages - 1 ? prev + 1 : 0))
+      }, 3500)
+      return () => clearInterval(scrollTimer)
+    }
+  }, [totalPages])
+
   const nextTecnico = () => {
     if (isTransitioning) return
     setIsTransitioning(true)
@@ -236,6 +250,16 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
       setCurrentUnidadePage(Math.max(0, totalUnidadePages - 1))
     }
   }, [computedUnidadeStats.length, totalUnidadePages])
+
+  // Auto-scroll horizontal unidades carousel
+  useEffect(() => {
+    if (totalUnidadePages > 1) {
+      const scrollTimer = setInterval(() => {
+        setCurrentUnidadePage((prev) => (prev < totalUnidadePages - 1 ? prev + 1 : 0))
+      }, 3500)
+      return () => clearInterval(scrollTimer)
+    }
+  }, [totalUnidadePages])
 
   const nextUnidade = () => {
     if (isUnidadeTransitioning) return
@@ -320,6 +344,33 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
         return <Bell className="h-4 w-4 text-gray-400" />
     }
   }
+
+  // --- Automatic vertical scroll for Recent Activity and Prontos ---
+  const recentActivityRef = useRef<HTMLDivElement>(null)
+  const prontosRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const scrollInterval = setInterval(() => {
+      if (recentActivityRef.current) {
+        recentActivityRef.current.scrollTop += 40
+        if (
+          recentActivityRef.current.scrollTop + recentActivityRef.current.clientHeight >=
+          recentActivityRef.current.scrollHeight - 1
+        ) {
+          recentActivityRef.current.scrollTop = 0
+        }
+      }
+      if (prontosRef.current) {
+        prontosRef.current.scrollTop += 40
+        if (
+          prontosRef.current.scrollTop + prontosRef.current.clientHeight >=
+          prontosRef.current.scrollHeight - 1
+        ) {
+          prontosRef.current.scrollTop = 0
+        }
+      }
+    }, 2000)
+    return () => clearInterval(scrollInterval)
+  }, [])
 
   return (
     <div className="min-h-screen bg-[var(--agnus-bg-primary)] text-[var(--agnus-text-primary)] font-abel tv-display">
@@ -662,7 +713,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0 h-[280px] overflow-y-auto custom-scroll">
+              <CardContent className="pt-0 h-[280px] overflow-y-auto custom-scroll" ref={recentActivityRef}>
                 <div className="space-y-1.5">
                   {filteredActivity.map((activity) => (
                     <div
@@ -673,7 +724,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                       <div className="flex items-center gap-2.5">
                         <div className="flex items-center gap-1.5">
                           {getStatusIcon(activity.tipo)}
-                          <span className={`text-xs font-medium ${getStatusColor(activity.tipo)}`}>
+                          <span className={`text-xs font-medium ${getStatusColor(activity.tipo)}`}> 
                             {activity.tipo}
                           </span>
                         </div>
@@ -717,7 +768,7 @@ export default function DashboardPage({ onNavigate }: DashboardPageProps) {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0 h-[280px] overflow-y-auto custom-scroll">
+              <CardContent className="pt-0 h-[280px] overflow-y-auto custom-scroll" ref={prontosRef}>
                 <div className="space-y-2">
                   {allProntosItems.length > 0 ? (
                     allProntosItems.map((item) => (

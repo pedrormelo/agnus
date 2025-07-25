@@ -101,11 +101,12 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
     tipo: ticketDetails?.tipo || '',
     unidade: ticketDetails?.unidade || '',
     descricao: ticketDetails?.descricao || '',
-    tecnico: ticketDetails?.tecnico || '',
+    tecnico: ticketDetails?.tecnico ? String(ticketDetails?.tecnico) : '',
   })
 
   const [unidades, setUnidades] = useState<{ idUnidade: number, nomeUnidade: string }[]>([])
-  const [tecnicos, setTecnicos] = useState<string[]>([])
+  // tecnicos can be array of string or array of objects
+  const [tecnicos, setTecnicos] = useState<any[]>([])
 
   useEffect(() => {
     // Fetch unidades
@@ -117,7 +118,12 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
     // Fetch tecnicos
     api.get('/tecnicos').then(res => {
       if (Array.isArray(res.data)) {
-        setTecnicos(res.data.map((t: any) => t.nomeTec))
+        // If backend returns array of objects with idTec and nomeTec, use as is
+        if (res.data.length > 0 && typeof res.data[0] === 'object' && 'idTec' in res.data[0]) {
+          setTecnicos(res.data)
+        } else {
+          setTecnicos(res.data.map((t: any) => ({ nomeTec: t })))
+        }
       }
     })
   }, [])
@@ -269,7 +275,7 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
         tipo: ticketDetails.tipo,
         unidade: ticketDetails.unidade,
         descricao: ticketDetails.descricao,
-        tecnico: ticketDetails.tecnico,
+        tecnico: ticketDetails.tecnico ? String(ticketDetails.tecnico) : '',
       })
     }
   }, [editDialogOpen, ticketDetails])
@@ -281,9 +287,13 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
         tombamento: ticketDetails.tombamento,
         ambiente: ticketDetails.ambiente,
         tipo: ticketDetails.tipo,
-        unidade: unidades.includes(ticketDetails.unidade) ? ticketDetails.unidade : unidades[0],
+        unidade: unidades.some(u => String(u.idUnidade) === String(ticketDetails.unidade))
+          ? String(ticketDetails.unidade)
+          : String(unidades[0].idUnidade),
         descricao: ticketDetails.descricao,
-        tecnico: tecnicos.includes(ticketDetails.tecnico) ? ticketDetails.tecnico : tecnicos[0],
+        tecnico: tecnicos.some(t => String(t.idTec) === String(ticketDetails.tecnico))
+          ? String(ticketDetails.tecnico)
+          : String(tecnicos[0]?.idTec || ''),
       }))
     }
   }, [editDialogOpen, ticketDetails, unidades, tecnicos])
@@ -434,7 +444,18 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                       onClick={() => onNavigate("tecnicos", { selectedTecnico: ticketDetails.tecnico })}
                       className="text-white font-bold hover:text-[#E9A870] transition-colors cursor-pointer text-lg font-abel"
                     >
-                      {ticketDetails.tecnico}
+                      {(() => {
+                        // Always show the tecnico name if possible
+                        let found = null;
+                        if (tecnicos && tecnicos.length > 0) {
+                          found = tecnicos.find(
+                            t => t.idTec === ticketDetails.tecnico || t.nomeTec === ticketDetails.tecnico
+                          );
+                        }
+                        if (found && found.nomeTec) return found.nomeTec;
+                        // fallback: show as string
+                        return ticketDetails.tecnico;
+                      })()}
                     </button>
                   </div>
                   <div className="space-y-2">
@@ -810,11 +831,11 @@ export default function DetalhesRegistro({ onNavigate, data }: DetalhesRegistroP
                                 <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
                                   {tecnicos.map((tecnico) => (
                                     <SelectItem
-                                      key={tecnico}
-                                      value={tecnico}
+                                      key={tecnico.idTec}
+                                      value={String(tecnico.idTec)}
                                       className="focus:bg-[#E9A870]/20 font-arial"
                                     >
-                                      {tecnico}
+                                      {tecnico.nomeTec}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

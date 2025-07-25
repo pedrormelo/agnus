@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import api from "@/lib/api"
+import { getUnidades, getTecnicos, createEquipamento } from "@/lib/api"
 
 import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+// import { UnidadeSelect } from "../../components/ui/UnidadeSelect"
+import { UnidadeSelect } from "@/components/ui/UnidadeSelect"
 import { Menu, ChevronLeft, Check, Home, ChevronRight } from "lucide-react"
 import { SidebarMenu } from "@/components/sidebar-menu"
 import { toast, Toaster } from "sonner"
@@ -21,6 +23,7 @@ export default function Registro({ onNavigate }: RegistroProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [formData, setFormData] = useState({
     tombamento: "",
+    numSerie: "",
     ambiente: "",
     tipo: "",
     unidade: "",
@@ -31,23 +34,28 @@ export default function Registro({ onNavigate }: RegistroProps) {
   const [tecnicos, setTecnicos] = useState<{ idTec: number; nomeTec: string }[]>([])
 
   useEffect(() => {
-    api.get("/unidades").then((res) => setUnidades(res.data)).catch(() => toast.error("Erro ao carregar unidades"))
-    api.get("/tecnicos").then((res) => setTecnicos(res.data)).catch(() => toast.error("Erro ao carregar técnicos"))
+    getUnidades().then((res) => setUnidades(res.data)).catch(() => toast.error("Erro ao carregar unidades"))
+    getTecnicos().then((res) => setTecnicos(res.data)).catch(() => toast.error("Erro ao carregar técnicos"))
   }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.tombamento && !formData.numSerie) {
+      toast.error("Preencha Tombamento ou Número de Série.");
+      return;
+    }
     try {
       // Map frontend fields to backend fields
       const payload = {
-        idTomb: formData.tombamento,
+        idTomb: formData.tombamento || null,
+        numSerie: formData.numSerie || null,
         ambiente: formData.ambiente,
         tipo: formData.tipo,
         descDefeito: formData.descricao,
         idUnidade: Number(formData.unidade),
         idTecnico: Number(formData.tecnico),
       };
-      await api.post("/equipamentos", payload);
+      await createEquipamento(payload);
       toast.success("Chamado registrado com sucesso!", {
         duration: 3000,
         position: "top-right",
@@ -59,7 +67,7 @@ export default function Registro({ onNavigate }: RegistroProps) {
   }
 
   const isFormValid =
-    formData.tombamento && formData.ambiente && formData.unidade && formData.descricao && formData.tecnico
+    (formData.tombamento || formData.numSerie) && formData.ambiente && formData.unidade && formData.descricao && formData.tecnico
 
   return (
     <div className="min-h-screen bg-[#191818] text-white font-abel">
@@ -141,7 +149,7 @@ export default function Registro({ onNavigate }: RegistroProps) {
             <CardContent className="p-8 bg-[#1C1815] space-y-6 custom-scroll">
               <form onSubmit={handleSubmit} className="space-y-6 custom-scroll max-h-[70vh] overflow-y-auto p-1">
                 {/* First Row */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#E9A870] font-arial">
                       TOMBAMENTO <span className="text-red-400">*</span>
@@ -153,7 +161,17 @@ export default function Registro({ onNavigate }: RegistroProps) {
                       className="bg-[#121212] border-[#E9A870]/30 text-white placeholder:text-gray-500 focus:border-[#E9A870] font-abel h-12 text-base"
                     />
                   </div>
-
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-[#E9A870] font-arial">
+                      NÚMERO DE SÉRIE <span className="text-red-400">*</span>
+                    </label>
+                    <Input
+                      placeholder="Ex: SN123456789"
+                      value={formData.numSerie}
+                      onChange={(e) => setFormData({ ...formData, numSerie: e.target.value })}
+                      className="bg-[#121212] border-[#E9A870]/30 text-white placeholder:text-gray-500 focus:border-[#E9A870] font-abel h-12 text-base"
+                    />
+                  </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#E9A870] font-arial">
                       AMBIENTE <span className="text-red-400">*</span>
@@ -165,7 +183,6 @@ export default function Registro({ onNavigate }: RegistroProps) {
                       className="bg-[#121212] border-[#E9A870]/30 text-white placeholder:text-gray-500 focus:border-[#E9A870] font-abel h-12 text-base"
                     />
                   </div>
-
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-[#E9A870] font-arial">TIPO</label>
                     <Input
@@ -179,24 +196,19 @@ export default function Registro({ onNavigate }: RegistroProps) {
 
                 {/* Second Row */}
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-[#E9A870] font-arial">
-                    UNIDADE <span className="text-red-400">*</span>
-                  </label>
-                  <Select
-                    value={formData.unidade}
-                    onValueChange={(value) => setFormData({ ...formData, unidade: value })}
-                  >
-                    <SelectTrigger className="bg-gradient-to-r from-[#121212] to-[#0C0C0C] border-[#E9A870]/40 text-white focus:border-[#E9A870] focus:ring-1 focus:ring-[#E9A870]/50 font-abel transition-all duration-200">
-                      <SelectValue placeholder="Selecione" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-[#1C1815] border-[#E9A870]/30 text-white custom-scroll">
-                      {unidades.map((u) => (
-                        <SelectItem key={u.idUnidade} value={u.idUnidade.toString()}>
-                          {u.nomeUnidade}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div>
+                    <label className="text-sm font-medium text-[#E9A870] font-arial">
+                      UNIDADE <span className="text-red-400">*</span>
+                    </label>
+                    <UnidadeSelect
+                      unidades={unidades.map(u => ({ id: u.idUnidade, nome: u.nomeUnidade }))}
+                      value={formData.unidade}
+                      onValueChange={(value: string) => setFormData({ ...formData, unidade: value })}
+                      required
+                      placeholder="Selecione"
+                      className="font-arial"
+                    />
+                  </div>
                 </div>
 
                 {/* Third Row */}

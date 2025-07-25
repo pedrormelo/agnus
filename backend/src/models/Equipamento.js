@@ -11,25 +11,49 @@ const Equipamento = {
         return rows[0];
     },
 
+
     create: async (dados) => {
-        const { idTomb, ambiente, descDefeito, tipo, idUnidade, idTecnico } = dados;
-
+        const { idTomb, numSerie, ambiente, descDefeito, tipo, idUnidade, idTecnico } = dados;
+        // At least one of idTomb or numSerie must be present
+        if (!idTomb && !numSerie) {
+            throw new Error("Informe ao menos Tombamento ou Nº de Série");
+        }
         const [result] = await db.query(
-            `INSERT INTO equipamentos (idTomb, ambiente, descDefeito, tipo, idUnidade, idTecnico) VALUES (?, ?, ?, ?, ?, ?)`,
-            [idTomb, ambiente, descDefeito, tipo, idUnidade, idTecnico]
+            `INSERT INTO equipamentos (idTomb, numSerie, ambiente, descDefeito, tipo, idUnidade, idTecnico, status, statusUrgente, dataEntrada) VALUES (?, ?, ?, ?, ?, ?, ?, 'ENTRADA', false, NOW())`,
+            [idTomb, numSerie, ambiente, descDefeito, tipo, idUnidade, idTecnico]
         );
-
         const idEquip = result.insertId;
-
         // Gera o código no formato yyyymmNNNN
         const now = new Date();
         const anoMes = now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
         const codigoEtiqueta = `${anoMes}${String(idEquip).padStart(4, '0')}`;
-
-        // Atualiza o equipamento com o código gerado
         await db.query(`UPDATE equipamentos SET codigoEtiqueta = ? WHERE idEquip = ?`, [codigoEtiqueta, idEquip]);
-
         return { idEquip, codigoEtiqueta };
+    },
+
+    moveToReparo: async (idEquip, { idTecnico, dataReparo }) => {
+        // Only allow if current status is ENTRADA
+        const [rows] = await db.query(`SELECT status FROM equipamentos WHERE idEquip = ?`, [idEquip]);
+        if (!rows[0] || rows[0].status !== 'ENTRADA') throw new Error('Status atual não permite REPARO');
+        await db.query(`UPDATE equipamentos SET status = 'REPARO', idTecnico = ?, dataReparo = ? WHERE idEquip = ?`, [idTecnico, dataReparo, idEquip]);
+    },
+
+    completePronto: async (idEquip, { solucao }) => {
+        // Only allow if current status is REPARO
+        const [rows] = await db.query(`SELECT status FROM equipamentos WHERE idEquip = ?`, [idEquip]);
+        if (!rows[0] || rows[0].status !== 'REPARO') throw new Error('Status atual não permite PRONTO');
+        await db.query(`UPDATE equipamentos SET status = 'PRONTO', solucao = ?, dataSaida = NOW() WHERE idEquip = ?`, [solucao, idEquip]);
+    },
+
+    markDescarte: async (idEquip, { motivoDescarte }) => {
+        // Only allow if current status is REPARO
+        const [rows] = await db.query(`SELECT status FROM equipamentos WHERE idEquip = ?`, [idEquip]);
+        if (!rows[0] || rows[0].status !== 'REPARO') throw new Error('Status atual não permite DESCARTE');
+        await db.query(`UPDATE equipamentos SET status = 'DESCARTE', motivoDescarte = ?, dataSaida = NOW() WHERE idEquip = ?`, [motivoDescarte, idEquip]);
+    },
+
+    setUrgente: async (idEquip) => {
+        await db.query(`UPDATE equipamentos SET statusUrgente = true WHERE idEquip = ?`, [idEquip]);
     },
 
 
@@ -82,13 +106,13 @@ Equipamento.getRelacionados = async (id) => {
     if (!eq) return [];
     // Busca outros equipamentos com mesmo tombamento, unidade ou ambiente (exceto o próprio)
     const [relacionados] = await db.query(
-        `SELECT e.idEquip as id, e.idTomb as tombamento, e.status, u.nomeUnidade as unidade, e.descDefeito as descricao, DATE_FORMAT(e.dataEntrada, '%Y-%m-%d') as dataAbertura
-         FROM equipamentos e
-         LEFT JOIN unidades u ON e.idUnidade = u.idUnidade
-         WHERE (e.idTomb = ? OR e.idUnidade = ? OR e.ambiente = ?) AND e.idEquip != ?
-         ORDER BY e.dataEntrada DESC
-         LIMIT 10`,
-        [eq.idTomb, eq.idUnidade, eq.ambiente, id]
+            `SELECT e.idEquip as id, e.idTomb as tombamento, e.status, u.nomeUnidade as unidade, e.descDefeito as descricao, DATE_FORMAT(e.dataEntrada, '%Y-%m-%d') as dataAbertura
+            FROM equipamentos e
+            LEFT JOIN unidades u ON e.idUnidade = u.idUnidade
+            WHERE (e.idUnidade = ? AND e.idEquip != ?)
+            ORDER BY e.dataEntrada DESC
+            LIMIT 10`,
+        [eq.idUnidade, id]
     );
     return relacionados;
 };
